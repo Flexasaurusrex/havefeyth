@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { useWalletClient, useReadContract } from 'wagmi';
+import { useReadContract, useWriteContract } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_ABI } from '@/lib/contract';
 import { getAllInteractions } from '@/lib/supabase';
@@ -12,7 +12,7 @@ import type { Interaction } from '@/lib/supabase';
 export default function AdminPage() {
   const router = useRouter();
   const { authenticated, user } = usePrivy();
-  const { data: walletClient } = useWalletClient();
+  const { writeContractAsync } = useWriteContract();
   
   const [newRewardAmount, setNewRewardAmount] = useState('');
   const [newTokenAddress, setNewTokenAddress] = useState('');
@@ -94,21 +94,19 @@ export default function AdminPage() {
   }, []);
 
   const handleUpdateRewardAmount = async () => {
-    if (!walletClient || !newRewardAmount) return;
+    if (!writeContractAsync || !newRewardAmount) return;
     
     setIsUpdating(true);
     try {
       const amountInWei = BigInt(Math.floor(parseFloat(newRewardAmount) * 1e18));
       
-      const { request } = await walletClient.simulateContract({
+      await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_ABI,
         functionName: 'setRewardAmount',
         args: [amountInWei],
-        account: user?.wallet?.address as `0x${string}`,
       });
       
-      await walletClient.writeContract(request);
       alert('Reward amount updated!');
       setNewRewardAmount('');
     } catch (error) {
@@ -120,19 +118,17 @@ export default function AdminPage() {
   };
 
   const handleUpdateRewardToken = async () => {
-    if (!walletClient || !newTokenAddress) return;
+    if (!writeContractAsync || !newTokenAddress) return;
     
     setIsUpdating(true);
     try {
-      const { request } = await walletClient.simulateContract({
+      await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_ABI,
         functionName: 'setRewardToken',
         args: [newTokenAddress as `0x${string}`],
-        account: user?.wallet?.address as `0x${string}`,
       });
       
-      await walletClient.writeContract(request);
       alert('Reward token updated!');
       setNewTokenAddress('');
     } catch (error) {
@@ -153,7 +149,7 @@ export default function AdminPage() {
         {/* Header */}
         <div className="flex justify-between items-center">
           <h1 className="text-4xl font-light">Admin Panel</h1>
-          <a
+          
             href="/"
             className="text-gray-500 hover:text-white transition-colors"
           >
