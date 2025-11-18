@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePrivy } from '@privy-io/react-auth';
-import { useWalletClient } from 'wagmi';
+import { useWriteContract } from 'wagmi';
 import Image from 'next/image';
 import { canUserInteract, recordInteraction } from '@/lib/supabase';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_ABI } from '@/lib/contract';
@@ -10,7 +10,7 @@ import { formatDistanceToNow } from '@/lib/utils';
 
 export default function Home() {
   const { login, authenticated, user, logout } = usePrivy();
-  const { data: walletClient } = useWalletClient();
+  const { writeContractAsync } = useWriteContract();
   
   const [message, setMessage] = useState('');
   const [isGlowing, setIsGlowing] = useState(false);
@@ -72,15 +72,12 @@ export default function Home() {
       );
       
       // Claim reward from contract
-      if (walletClient) {
-        const { request } = await walletClient.simulateContract({
+      if (writeContractAsync) {
+        await writeContractAsync({
           address: CONTRACT_ADDRESS,
           abi: HAVE_FEYTH_ABI,
           functionName: 'claimReward',
-          account: user.wallet.address as `0x${string}`,
         });
-        
-        await walletClient.writeContract(request);
       }
       
       // Show success
@@ -206,7 +203,7 @@ export default function Home() {
         {/* Admin Link */}
         {authenticated && user?.wallet?.address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase() && (
           <div className="text-center">
-            <a
+            
               href="/admin"
               className="text-gray-500 hover:text-white transition-colors text-sm"
             >
