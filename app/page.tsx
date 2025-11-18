@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePrivy } from '@privy-io/react-auth';
-import { useWriteContract } from 'wagmi';
+import { useAccount, useWriteContract } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Image from 'next/image';
 import { canUserInteract, recordInteraction } from '@/lib/supabase';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_ABI } from '@/lib/contract';
@@ -11,7 +11,7 @@ import { formatDistanceToNow } from '@/lib/utils';
 export const dynamic = 'force-dynamic';
 
 export default function Home() {
-  const { login, authenticated, user, logout } = usePrivy();
+  const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   
   const [message, setMessage] = useState('');
@@ -24,15 +24,15 @@ export default function Home() {
 
   useEffect(() => {
     async function checkCooldown() {
-      if (!user?.wallet?.address) return;
+      if (!address) return;
       
-      const status = await canUserInteract(user.wallet.address);
+      const status = await canUserInteract(address);
       setCanInteract(status.canInteract);
       setNextAvailable(status.nextAvailable || null);
     }
     
     checkCooldown();
-  }, [user]);
+  }, [address]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessage(e.target.value);
@@ -40,7 +40,7 @@ export default function Home() {
   };
 
   const handleShare = async (platform: 'twitter' | 'farcaster') => {
-    if (!authenticated || !user?.wallet?.address || !message.trim()) return;
+    if (!isConnected || !address || !message.trim()) return;
     
     setSelectedPlatform(platform);
     setIsSharing(true);
@@ -61,7 +61,7 @@ export default function Home() {
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       await recordInteraction(
-        user.wallet.address,
+        address,
         message,
         platform,
         shareLink
@@ -115,17 +115,14 @@ export default function Home() {
           </div>
         </div>
 
-        {!authenticated ? (
+        {!isConnected ? (
           <div className="text-center space-y-4">
             <p className="text-gray-400 text-lg">
               Connect to share your message of goodwill
             </p>
-            <button
-              onClick={login}
-              className="px-8 py-4 bg-white text-black font-medium rounded-lg hover:bg-gray-200 transition-colors"
-            >
-              Connect Wallet
-            </button>
+            <div className="flex justify-center">
+              <ConnectButton />
+            </div>
           </div>
         ) : (
           <>
@@ -172,19 +169,16 @@ export default function Home() {
 
             <div className="text-center space-y-2">
               <p className="text-gray-500 text-sm">
-                Connected: {user?.wallet?.address?.slice(0, 6)}...{user?.wallet?.address?.slice(-4)}
+                Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
               </p>
-              <button
-                onClick={logout}
-                className="text-gray-500 text-sm hover:text-white transition-colors"
-              >
-                Disconnect
-              </button>
+              <div className="flex justify-center">
+                <ConnectButton />
+              </div>
             </div>
           </>
         )}
 
-        {authenticated && user?.wallet?.address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase() && (
+        {isConnected && address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase() && (
           <div className="text-center">
             <a
               href="/admin"
