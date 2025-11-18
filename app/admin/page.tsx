@@ -26,7 +26,6 @@ export default function AdminPage() {
     farcasterShares: 0,
   });
 
-  // Read contract data
   const { data: rewardAmount } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_ABI,
@@ -51,7 +50,6 @@ export default function AdminPage() {
     functionName: 'owner',
   });
 
-  // Check admin access
   useEffect(() => {
     if (!authenticated) {
       router.push('/');
@@ -66,13 +64,11 @@ export default function AdminPage() {
     }
   }, [authenticated, user, router, owner]);
 
-  // Load interactions
   useEffect(() => {
     async function loadData() {
       const data = await getAllInteractions();
       setInteractions(data);
       
-      // Calculate stats
       const uniqueUsers = new Set(data.map(i => i.wallet_address)).size;
       const claimed = data.filter(i => i.claimed).length;
       const twitter = data.filter(i => i.shared_platform === 'twitter').length;
@@ -88,7 +84,7 @@ export default function AdminPage() {
     }
     
     loadData();
-    const interval = setInterval(loadData, 10000); // Refresh every 10s
+    const interval = setInterval(loadData, 10000);
     
     return () => clearInterval(interval);
   }, []);
@@ -146,10 +142,9 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen p-8">
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Header */}
         <div className="flex justify-between items-center">
           <h1 className="text-4xl font-light">Admin Panel</h1>
-          
+          <a
             href="/"
             className="text-gray-500 hover:text-white transition-colors"
           >
@@ -157,7 +152,6 @@ export default function AdminPage() {
           </a>
         </div>
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           <div className="bg-white/5 p-6 rounded-lg">
             <div className="text-3xl font-bold">{stats.totalInteractions}</div>
@@ -181,7 +175,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Contract Info */}
         <div className="bg-white/5 p-6 rounded-lg space-y-4">
           <h2 className="text-2xl font-light">Contract Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -204,9 +197,7 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Update Controls */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Update Reward Amount */}
           <div className="bg-white/5 p-6 rounded-lg space-y-4">
             <h3 className="text-xl font-light">Update Reward Amount</h3>
             <input
@@ -227,7 +218,6 @@ export default function AdminPage() {
             </button>
           </div>
 
-          {/* Update Reward Token */}
           <div className="bg-white/5 p-6 rounded-lg space-y-4">
             <h3 className="text-xl font-light">Update Reward Token</h3>
             <input
@@ -248,7 +238,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Recent Interactions */}
         <div className="bg-white/5 p-6 rounded-lg space-y-4">
           <h2 className="text-2xl font-light">Recent Interactions</h2>
           <div className="overflow-x-auto">
