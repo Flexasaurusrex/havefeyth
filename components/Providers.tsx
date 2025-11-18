@@ -1,40 +1,28 @@
 'use client';
 
-import { PrivyProvider } from '@privy-io/react-auth';
-import { base } from 'viem/chains';
-import { WagmiProvider, createConfig, http } from 'wagmi';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import '@rainbow-me/rainbowkit/styles.css';
+import { getDefaultConfig, RainbowKitProvider, darkTheme } from '@rainbow-me/rainbowkit';
+import { WagmiProvider } from 'wagmi';
+import { base } from 'wagmi/chains';
+import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 
-const wagmiConfig = createConfig({
+const config = getDefaultConfig({
+  appName: 'HAVE FEYTH',
+  projectId: 'YOUR_PROJECT_ID', // Get free ID from cloud.walletconnect.com
   chains: [base],
-  transports: {
-    [base.id]: http(),
-  },
+  ssr: true,
 });
 
 const queryClient = new QueryClient();
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <PrivyProvider
-      appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID || ''}
-      config={{
-        loginMethods: ['wallet', 'twitter', 'farcaster'],
-        appearance: {
-          theme: 'dark',
-          accentColor: '#000000',
-          logo: '/logo.png',
-        },
-        embeddedWallets: {
-          createOnLogin: 'users-without-wallets',
-        },
-        defaultChain: base,
-        supportedChains: [base],
-      }}
-    >
+    <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <WagmiProvider config={wagmiConfig}>{children}</WagmiProvider>
+        <RainbowKitProvider theme={darkTheme()}>
+          {children}
+        </RainbowKitProvider>
       </QueryClientProvider>
-    </PrivyProvider>
+    </WagmiProvider>
   );
 }
