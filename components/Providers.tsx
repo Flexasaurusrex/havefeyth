@@ -8,7 +8,7 @@ import { QueryClientProvider, QueryClient } from '@tanstack/react-query';
 
 const config = getDefaultConfig({
   appName: 'HAVE FEYTH',
-  projectId: 'YOUR_PROJECT_ID', // Get free ID from cloud.walletconnect.com
+  projectId: '86e2d6ed60dabc67c1248fbebe92aef6',
   chains: [base],
   ssr: true,
 });
