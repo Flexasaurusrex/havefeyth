@@ -1,8 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePrivy } from '@privy-io/react-auth';
-import { useReadContract, useWriteContract } from 'wagmi';
+import { useAccount, useReadContract, useWriteContract } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_ABI } from '@/lib/contract';
 import { getAllInteractions } from '@/lib/supabase';
@@ -13,7 +12,7 @@ export const dynamic = 'force-dynamic';
 
 export default function AdminPage() {
   const router = useRouter();
-  const { authenticated, user } = usePrivy();
+  const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   
   const [newRewardAmount, setNewRewardAmount] = useState('');
@@ -53,18 +52,18 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
-    if (!authenticated) {
+    if (!isConnected) {
       router.push('/');
       return;
     }
     
     const adminAddress = process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
-    const userAddress = user?.wallet?.address?.toLowerCase();
+    const userAddress = address?.toLowerCase();
     
-    if (adminAddress !== userAddress && owner?.toLowerCase() !== userAddress) {
+    if (adminAddress !== userAddress && owner?.toString().toLowerCase() !== userAddress) {
       router.push('/');
     }
-  }, [authenticated, user, router, owner]);
+  }, [isConnected, address, router, owner]);
 
   useEffect(() => {
     async function loadData() {
@@ -137,7 +136,7 @@ export default function AdminPage() {
     }
   };
 
-  if (!authenticated) {
+  if (!isConnected) {
     return null;
   }
 
