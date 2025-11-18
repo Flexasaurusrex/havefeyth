@@ -8,6 +8,8 @@ import { canUserInteract, recordInteraction } from '@/lib/supabase';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_ABI } from '@/lib/contract';
 import { formatDistanceToNow } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 export default function Home() {
   const { login, authenticated, user, logout } = usePrivy();
   const { writeContractAsync } = useWriteContract();
