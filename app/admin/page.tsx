@@ -9,6 +9,8 @@ import { getAllInteractions } from '@/lib/supabase';
 import { formatEther, shortenAddress } from '@/lib/utils';
 import type { Interaction } from '@/lib/supabase';
 
+export const dynamic = 'force-dynamic';
+
 export default function AdminPage() {
   const router = useRouter();
   const { authenticated, user } = usePrivy();
