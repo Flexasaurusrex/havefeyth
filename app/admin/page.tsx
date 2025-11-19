@@ -10,21 +10,6 @@ import { formatEther } from 'viem';
 
 export const dynamic = 'force-dynamic';
 
-interface Reward {
-  rewardAmount: bigint;
-  requiredTokenAmount: bigint;
-  rewardToken: string;
-  requiredToken: string;
-  isERC721: boolean;
-  isActive: boolean;
-  startTime: bigint;
-  endTime: bigint;
-  maxClaims: bigint;
-  totalClaims: bigint;
-  cooldown: bigint;
-  lastClaimTime: bigint;
-}
-
 export default function AdminPage() {
   const router = useRouter();
   const { address, isConnected } = useAccount();
@@ -74,14 +59,7 @@ export default function AdminPage() {
       router.push('/');
       return;
     }
-    
-    const adminAddress = process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
-    const userAddress = address?.toLowerCase();
-    
-    if (adminAddress !== userAddress && owner?.toString().toLowerCase() !== userAddress) {
-      router.push('/');
-    }
-  }, [isConnected, address, router, owner]);
+  }, [isConnected, router]);
 
   useEffect(() => {
     async function loadData() {
