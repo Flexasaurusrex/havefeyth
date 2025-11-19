@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract } from 'wagmi';
 import { useRouter } from 'next/navigation';
-import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI, RewardType } from '@/lib/contract';
+import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI, RewardType, DistributionMode } from '@/lib/contract';
 import { getAllInteractions } from '@/lib/supabase';
 import type { Interaction } from '@/lib/supabase';
 import { formatEther, parseEther } from 'viem';
@@ -15,7 +15,7 @@ export default function AdminPage() {
   const { address, isConnected, isConnecting } = useAccount();
   const { writeContractAsync } = useWriteContract();
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'rewards' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'rewards' | 'distribution' | 'access' | 'settings'>('overview');
   const [isUpdating, setIsUpdating] = useState(false);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -35,6 +35,14 @@ export default function AdminPage() {
     symbol: '',
   });
 
+  const [nftQueueInput, setNftQueueInput] = useState({
+    rewardId: '',
+    tokenIds: '',
+  });
+
+  const [whitelistInput, setWhitelistInput] = useState('');
+  const [blacklistInput, setBlacklistInput] = useState('');
+
   const { data: owner } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
@@ -53,6 +61,42 @@ export default function AdminPage() {
     functionName: 'rewardCount',
   });
 
+  const { data: distributionMode } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'distributionMode',
+  });
+
+  const { data: randomSelectionCount } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'randomSelectionCount',
+  });
+
+  const { data: cooldownPeriod } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'cooldownPeriod',
+  });
+
+  const { data: maxLifetimeClaimsPerUser } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'maxLifetimeClaimsPerUser',
+  });
+
+  const { data: maxClaimsPerHour } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'maxClaimsPerHour',
+  });
+
+  const { data: whitelistEnabled } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'whitelistEnabled',
+  });
+
   const { data: allRewards, refetch: refetchRewards } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
@@ -60,7 +104,6 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
-    // Wait a moment for wallet to connect before checking
     const timer = setTimeout(() => {
       setIsLoading(false);
       if (!isConnecting && !isConnected) {
@@ -148,6 +191,37 @@ export default function AdminPage() {
     });
   };
 
+  const handleBatchAddNFTs = async () => {
+    if (!nftQueueInput.rewardId || !nftQueueInput.tokenIds) {
+      alert('Please fill all fields');
+      return;
+    }
+
+    const tokenIds = nftQueueInput.tokenIds.split(',').map(id => BigInt(id.trim()));
+
+    await executeContractCall(
+      'batchAddNFTsToQueue',
+      [BigInt(nftQueueInput.rewardId), tokenIds],
+      'NFTs added to queue!'
+    );
+
+    setNftQueueInput({ rewardId: '', tokenIds: '' });
+  };
+
+  const formatTime = (seconds: bigint | undefined) => {
+    if (!seconds) return 'N/A';
+    const hours = Number(seconds) / 3600;
+    return `${hours.toFixed(1)} hours`;
+  };
+
+  const getDistributionModeLabel = (mode: number | undefined) => {
+    if (mode === undefined) return 'Unknown';
+    if (mode === 0) return 'All Rewards';
+    if (mode === 1) return 'Random Selection';
+    if (mode === 2) return 'Weighted Random';
+    return 'Unknown';
+  };
+
   if (isLoading || isConnecting) {
     return (
       <main className="min-h-screen flex items-center justify-center">
@@ -202,12 +276,12 @@ export default function AdminPage() {
           </div>
         </div>
 
-        <div className="flex gap-2 border-b border-white/10">
-          {['overview', 'rewards', 'settings'].map((tab) => (
+        <div className="flex gap-2 border-b border-white/10 overflow-x-auto">
+          {['overview', 'rewards', 'distribution', 'access', 'settings'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
-              className={`px-4 py-2 text-sm font-medium transition-colors ${
+              className={`px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
                 activeTab === tab
                   ? 'text-white border-b-2 border-white'
                   : 'text-gray-500 hover:text-gray-300'
@@ -336,6 +410,39 @@ export default function AdminPage() {
             </div>
 
             <div className="bg-white/5 p-6 rounded-lg border border-white/10">
+              <h2 className="text-2xl font-light mb-4">NFT Queue Management</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Reward ID</label>
+                  <input
+                    type="number"
+                    value={nftQueueInput.rewardId}
+                    onChange={(e) => setNftQueueInput({...nftQueueInput, rewardId: e.target.value})}
+                    placeholder="0"
+                    className="w-full bg-black border border-white/20 rounded p-3"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Token IDs (comma-separated)</label>
+                  <input
+                    type="text"
+                    value={nftQueueInput.tokenIds}
+                    onChange={(e) => setNftQueueInput({...nftQueueInput, tokenIds: e.target.value})}
+                    placeholder="1,2,3,4,5"
+                    className="w-full bg-black border border-white/20 rounded p-3"
+                  />
+                </div>
+              </div>
+              <button
+                onClick={handleBatchAddNFTs}
+                disabled={isUpdating}
+                className="mt-4 w-full px-4 py-3 bg-purple-600 text-white font-medium rounded hover:bg-purple-700 transition-colors disabled:opacity-50"
+              >
+                {isUpdating ? 'Adding NFTs...' : 'Batch Add NFTs to Queue'}
+              </button>
+            </div>
+
+            <div className="bg-white/5 p-6 rounded-lg border border-white/10">
               <h2 className="text-2xl font-light mb-4">Active Rewards</h2>
               {!allRewards || allRewards.length === 0 ? (
                 <p className="text-gray-400">No rewards yet. Add one above!</p>
@@ -343,7 +450,7 @@ export default function AdminPage() {
                 <div className="space-y-3">
                   {allRewards.map((reward: any, index: number) => (
                     <div key={index} className="p-4 bg-white/5 rounded-lg border border-white/10">
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between mb-2">
                         <div>
                           <div className="font-medium text-lg">#{index} - {reward.name}</div>
                           <div className="text-sm text-gray-400">
@@ -362,10 +469,236 @@ export default function AdminPage() {
                           {reward.isActive ? '✓ Active' : '○ Inactive'}
                         </div>
                       </div>
+                      <div className="flex gap-2 mt-2">
+                        <button
+                          onClick={() => executeContractCall('toggleReward', [BigInt(index), !reward.isActive], `Reward ${!reward.isActive ? 'activated' : 'deactivated'}!`)}
+                          disabled={isUpdating}
+                          className="px-3 py-1 text-xs bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          {reward.isActive ? 'Deactivate' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Remove this reward?')) {
+                              executeContractCall('removeReward', [BigInt(index)], 'Reward removed!');
+                            }
+                          }}
+                          disabled={isUpdating}
+                          className="px-3 py-1 text-xs bg-red-600 rounded hover:bg-red-700 disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'distribution' && (
+          <div className="space-y-6">
+            <div className="bg-white/5 p-6 rounded-lg border border-white/10">
+              <h2 className="text-2xl font-light mb-4">Distribution Settings</h2>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Current Mode: {getDistributionModeLabel(Number(distributionMode))}</label>
+                  <div className="grid grid-cols-3 gap-2">
+                    <button
+                      onClick={() => executeContractCall('setDistributionMode', [0], 'Distribution mode set to All Rewards!')}
+                      disabled={isUpdating}
+                      className="px-4 py-3 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                    >
+                      All Rewards
+                    </button>
+                    <button
+                      onClick={() => executeContractCall('setDistributionMode', [1], 'Distribution mode set to Random Selection!')}
+                      disabled={isUpdating}
+                      className="px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      Random Selection
+                    </button>
+                    <button
+                      onClick={() => executeContractCall('setDistributionMode', [2], 'Distribution mode set to Weighted Random!')}
+                      disabled={isUpdating}
+                      className="px-4 py-3 bg-purple-600 text-white rounded hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      Weighted Random
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Random Selection Count: {randomSelectionCount?.toString()}</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      id="randomCount"
+                      placeholder="2"
+                      className="flex-1 bg-black border border-white/20 rounded p-3"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById('randomCount') as HTMLInputElement;
+                        if (input.value) {
+                          executeContractCall('setRandomSelectionCount', [BigInt(input.value)], 'Random count updated!');
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="px-6 py-3 bg-white text-black font-medium rounded hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Cooldown Period: {formatTime(cooldownPeriod)}</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      id="cooldown"
+                      placeholder="86400"
+                      className="flex-1 bg-black border border-white/20 rounded p-3"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById('cooldown') as HTMLInputElement;
+                        if (input.value) {
+                          executeContractCall('setCooldownPeriod', [BigInt(input.value)], 'Cooldown updated!');
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="px-6 py-3 bg-white text-black font-medium rounded hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Set (seconds)
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Max Lifetime Claims: {maxLifetimeClaimsPerUser?.toString()}</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      id="maxLifetime"
+                      placeholder="1000"
+                      className="flex-1 bg-black border border-white/20 rounded p-3"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById('maxLifetime') as HTMLInputElement;
+                        if (input.value) {
+                          executeContractCall('setMaxLifetimeClaimsPerUser', [BigInt(input.value)], 'Max lifetime claims updated!');
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="px-6 py-3 bg-white text-black font-medium rounded hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-sm text-gray-400 mb-2 block">Max Claims Per Hour: {maxClaimsPerHour?.toString()}</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      id="maxHourly"
+                      placeholder="100"
+                      className="flex-1 bg-black border border-white/20 rounded p-3"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById('maxHourly') as HTMLInputElement;
+                        if (input.value) {
+                          executeContractCall('setMaxClaimsPerHour', [BigInt(input.value)], 'Max hourly claims updated!');
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="px-6 py-3 bg-white text-black font-medium rounded hover:bg-gray-200 disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'access' && (
+          <div className="space-y-6">
+            <div className="bg-white/5 p-6 rounded-lg border border-white/10">
+              <h2 className="text-2xl font-light mb-4">Whitelist Control</h2>
+              <div className="mb-4">
+                <div className={`inline-block px-4 py-2 rounded ${whitelistEnabled ? 'bg-green-600' : 'bg-gray-600'}`}>
+                  Whitelist: {whitelistEnabled ? 'ENABLED' : 'DISABLED'}
+                </div>
+              </div>
+              <button
+                onClick={() => executeContractCall('toggleWhitelist', [!whitelistEnabled], `Whitelist ${!whitelistEnabled ? 'enabled' : 'disabled'}!`)}
+                disabled={isUpdating}
+                className={`w-full px-4 py-3 font-medium rounded ${whitelistEnabled ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white disabled:opacity-50`}
+              >
+                {whitelistEnabled ? 'Disable Whitelist' : 'Enable Whitelist'}
+              </button>
+
+              <div className="mt-6">
+                <label className="text-sm text-gray-400 mb-2 block">Add to Whitelist</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={whitelistInput}
+                    onChange={(e) => setWhitelistInput(e.target.value)}
+                    placeholder="0x... (one address)"
+                    className="flex-1 bg-black border border-white/20 rounded p-3 font-mono text-sm"
+                  />
+                  <button
+                    onClick={() => {
+                      if (whitelistInput) {
+                        executeContractCall('addToWhitelist', [whitelistInput as `0x${string}`], 'Address whitelisted!');
+                        setWhitelistInput('');
+                      }
+                    }}
+                    disabled={isUpdating}
+                    className="px-6 py-3 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white/5 p-6 rounded-lg border border-white/10">
+              <h2 className="text-2xl font-light mb-4">Blacklist Control</h2>
+              <div className="mt-6">
+                <label className="text-sm text-gray-400 mb-2 block">Add to Blacklist</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={blacklistInput}
+                    onChange={(e) => setBlacklistInput(e.target.value)}
+                    placeholder="0x... (one address)"
+                    className="flex-1 bg-black border border-white/20 rounded p-3 font-mono text-sm"
+                  />
+                  <button
+                    onClick={() => {
+                      if (blacklistInput) {
+                        executeContractCall('addToBlacklist', [blacklistInput as `0x${string}`], 'Address blacklisted!');
+                        setBlacklistInput('');
+                      }
+                    }}
+                    disabled={isUpdating}
+                    className="px-6 py-3 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -388,7 +721,7 @@ export default function AdminPage() {
             </div>
 
             <div className="bg-white/5 p-6 rounded-lg border border-white/10">
-              <h3 className="text-xl font-light mb-4">Emergency Withdraw</h3>
+              <h3 className="text-xl font-light mb-4">Emergency Withdraw ETH</h3>
               <button
                 onClick={() => {
                   if (confirm('Withdraw all ETH from contract?')) {
@@ -400,6 +733,44 @@ export default function AdminPage() {
               >
                 Withdraw ETH
               </button>
+            </div>
+
+            <div className="bg-white/5 p-6 rounded-lg border border-white/10">
+              <h3 className="text-xl font-light mb-4">Withdraw ERC20</h3>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  id="tokenAddress"
+                  placeholder="Token Address (0x...)"
+                  className="w-full bg-black border border-white/20 rounded p-3 font-mono text-sm"
+                />
+                <button
+                  onClick={() => {
+                    const input = document.getElementById('tokenAddress') as HTMLInputElement;
+                    if (input.value && confirm(`Withdraw all ${input.value}?`)) {
+                      executeContractCall('withdrawAllERC20', [input.value as `0x${string}`], 'Tokens withdrawn!');
+                    }
+                  }}
+                  disabled={isUpdating}
+                  className="w-full px-4 py-3 bg-orange-600 text-white font-medium rounded hover:bg-orange-700 disabled:opacity-50"
+                >
+                  Withdraw All
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white/5 p-6 rounded-lg border border-white/10">
+              <h3 className="text-xl font-light mb-4">Contract Info</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Address:</span>
+                  <span className="font-mono">{CONTRACT_ADDRESS.slice(0, 10)}...{CONTRACT_ADDRESS.slice(-8)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Owner:</span>
+                  <span className="font-mono">{owner?.toString().slice(0, 10)}...{owner?.toString().slice(-8)}</span>
+                </div>
+              </div>
             </div>
           </div>
         )}
