@@ -80,6 +80,7 @@ export default function Home() {
           address: CONTRACT_ADDRESS,
           abi: HAVE_FEYTH_ABI,
           functionName: 'claimReward',
+          args: [BigInt(0), []],
         });
       }
       
@@ -194,7 +195,7 @@ export default function Home() {
 
         {isConnected && address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase() && (
           <div className="text-center">
-            <a
+            
               href="/admin"
               className="text-gray-500 hover:text-white transition-colors text-sm"
             >
