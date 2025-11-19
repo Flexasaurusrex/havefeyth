@@ -106,7 +106,7 @@ export default function AdminPage() {
   }, []);
 
   const executeContractCall = async (
-    functionName: string,
+    functionName: any,
     args: any[],
     successMessage: string
   ) => {
@@ -115,8 +115,8 @@ export default function AdminPage() {
       await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_ABI,
-        functionName,
-        args,
+        functionName: functionName as any,
+        args: args as any,
       });
       alert(successMessage);
       refetchRewards();
