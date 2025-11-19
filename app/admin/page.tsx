@@ -163,7 +163,11 @@ export default function AdminPage() {
         args: args as any,
       });
       alert(successMessage);
-      refetchRewards();
+      
+      // Give blockchain time to update, then refetch
+      setTimeout(() => {
+        refetchRewards();
+      }, 2000);
     } catch (error: any) {
       console.error(`Error calling ${functionName}:`, error);
       alert(`Failed: ${error?.message || 'Unknown error'}`);
@@ -783,8 +787,19 @@ export default function AdminPage() {
 
               {/* Active Rewards */}
               <div className="mb-8">
-                <h3 className="text-xl font-bold mb-4">Active Rewards</h3>
-                {!allRewards || allRewards.length === 0 ? (
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold">Active Rewards</h3>
+                  <button
+                    onClick={() => {
+                      refetchRewards();
+                      alert('Refreshed! ✅');
+                    }}
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
+                {!allRewards || allRewards.length === 0 || allRewards.every((r: any) => r.tokenAddress === '0x0000000000000000000000000000000000000000') ? (
                   <div className="text-center py-12 bg-black/30 rounded-xl">
                     <div className="text-4xl mb-4">🎁</div>
                     <p className="text-gray-400 mb-2">No rewards configured yet.</p>
@@ -792,15 +807,18 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {allRewards.map((reward: any, index: number) => (
+                    {allRewards
+                      .map((reward: any, originalIndex: number) => ({ reward, originalIndex }))
+                      .filter(({ reward }: any) => reward.tokenAddress !== '0x0000000000000000000000000000000000000000')
+                      .map(({ reward, originalIndex }: any) => (
                       <div 
-                        key={index} 
+                        key={originalIndex} 
                         className="p-5 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl border border-white/10 hover:border-white/20 transition-colors"
                       >
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 mb-2">
-                              <div className="text-2xl font-bold">#{index}</div>
+                              <div className="text-2xl font-bold">#{originalIndex}</div>
                               <div>
                                 <div className="font-bold text-lg">{reward.name}</div>
                                 <div className="text-sm text-gray-400">{reward.symbol}</div>
@@ -827,7 +845,7 @@ export default function AdminPage() {
                         
                         <div className="flex flex-wrap gap-2">
                           <button
-                            onClick={() => executeContractCall('toggleReward', [BigInt(index), !reward.isActive], `Reward ${!reward.isActive ? 'activated' : 'deactivated'}!`)}
+                            onClick={() => executeContractCall('toggleReward', [BigInt(originalIndex), !reward.isActive], `Reward ${!reward.isActive ? 'activated' : 'deactivated'}!`)}
                             disabled={isUpdating}
                             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
                           >
@@ -836,7 +854,7 @@ export default function AdminPage() {
                           <button
                             onClick={() => {
                               if (confirm('Remove this reward?')) {
-                                executeContractCall('removeReward', [BigInt(index)], 'Reward removed!');
+                                executeContractCall('removeReward', [BigInt(originalIndex)], 'Reward removed!');
                               }
                             }}
                             disabled={isUpdating}
