@@ -39,7 +39,6 @@ export default function AdminPage() {
     totalClaimed: 0,
   });
   
-  // Form state
   const [newReward, setNewReward] = useState({
     rewardAmount: '',
     requiredTokenAmount: '0',
@@ -152,7 +151,6 @@ export default function AdminPage() {
       'Reward added successfully!'
     );
 
-    // Reset form
     setNewReward({
       rewardAmount: '',
       requiredTokenAmount: '0',
@@ -171,7 +169,6 @@ export default function AdminPage() {
   return (
     <main className="min-h-screen p-4 md:p-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-4xl font-light mb-2">Feylon Control Center</h1>
@@ -182,7 +179,6 @@ export default function AdminPage() {
           </a>
         </div>
 
-        {/* Status Banner */}
         <div className={`p-4 rounded-lg ${isPaused ? 'bg-red-500/20 border border-red-500/50' : 'bg-green-500/20 border border-green-500/50'}`}>
           <div className="flex items-center justify-between">
             <div>
@@ -196,7 +192,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Quick Stats */}
         <div className="grid grid-cols-3 gap-3">
           <div className="bg-white/5 p-4 rounded-lg border border-white/10">
             <div className="text-2xl font-bold">{stats.totalInteractions}</div>
@@ -212,7 +207,6 @@ export default function AdminPage() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="flex gap-2 border-b border-white/10">
           {['overview', 'rewards', 'settings'].map((tab) => (
             <button
@@ -229,10 +223,8 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* Tab Content */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
-            {/* Recent Activity */}
             <div className="bg-white/5 p-6 rounded-lg border border-white/10">
               <h2 className="text-2xl font-light mb-4">Recent Activity</h2>
               <div className="overflow-x-auto">
@@ -265,7 +257,6 @@ export default function AdminPage() {
 
         {activeTab === 'rewards' && (
           <div className="space-y-6">
-            {/* Add New Reward */}
             <div className="bg-white/5 p-6 rounded-lg border border-white/10">
               <h2 className="text-2xl font-light mb-4">Add New Reward</h2>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -323,7 +314,6 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Active Rewards List */}
             <div className="bg-white/5 p-6 rounded-lg border border-white/10">
               <h2 className="text-2xl font-light mb-4">Active Rewards</h2>
               {!activeRewardIds || activeRewardIds.length === 0 ? (
@@ -341,7 +331,6 @@ export default function AdminPage() {
 
         {activeTab === 'settings' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Pause Control */}
             <div className="bg-white/5 p-6 rounded-lg border border-white/10">
               <h3 className="text-xl font-light mb-4">Contract Control</h3>
               <button
@@ -357,7 +346,6 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Withdraw */}
             <div className="bg-white/5 p-6 rounded-lg border border-white/10">
               <h3 className="text-xl font-light mb-4">Emergency Withdraw</h3>
               <button
@@ -379,7 +367,6 @@ export default function AdminPage() {
   );
 }
 
-// Reward Card Component
 function RewardCard({ rewardId }: { rewardId: number }) {
   const { data: rewardInfo } = useReadContract({
     address: CONTRACT_ADDRESS,
@@ -390,7 +377,8 @@ function RewardCard({ rewardId }: { rewardId: number }) {
 
   if (!rewardInfo) return null;
 
-  const [rewardAmount, , rewardToken, , , isActive, , , maxClaims, totalClaims] = rewardInfo as any[];
+  const rewardData = rewardInfo as readonly [bigint, bigint, string, string, boolean, boolean, bigint, bigint, bigint, bigint, bigint, bigint];
+  const [rewardAmount, , rewardToken, , , isActive, , , maxClaims, totalClaims] = rewardData;
 
   return (
     <div className="p-4 bg-white/5 rounded-lg border border-white/10">
