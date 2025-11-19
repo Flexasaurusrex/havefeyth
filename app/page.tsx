@@ -5,9 +5,8 @@ import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagm
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Image from 'next/image';
 import { canUserInteract, recordInteraction } from '@/lib/supabase';
-import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI } from '@/lib/contract';
+import { CONTRACT_ADDRESS, HAVE_FEYTH_ABI } from '@/lib/contract';
 import { formatDistanceToNow } from '@/lib/utils';
-import { RewardToast, type RewardItem } from '@/components/RewardToast';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,8 +22,6 @@ export default function Home() {
   const [isSharing, setIsSharing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<'twitter' | 'farcaster' | null>(null);
-  const [claimedRewards, setClaimedRewards] = useState<RewardItem[]>([]);
-  const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
     async function checkCooldown() {
@@ -39,15 +36,11 @@ export default function Home() {
   }, [address]);
 
   useEffect(() => {
-    if (isConfirmed && claimedRewards.length > 0) {
-      setShowToast(true);
+    if (isConfirmed) {
       setShowSuccess(true);
-      
-      setTimeout(() => {
-        setShowSuccess(false);
-      }, 5000);
+      setTimeout(() => setShowSuccess(false), 5000);
     }
-  }, [isConfirmed, claimedRewards]);
+  }, [isConfirmed]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessage(e.target.value);
@@ -85,7 +78,7 @@ export default function Home() {
       if (writeContractAsync) {
         await writeContractAsync({
           address: CONTRACT_ADDRESS,
-          abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+          abi: HAVE_FEYTH_ABI,
           functionName: 'claimReward',
         });
       }
@@ -181,9 +174,9 @@ export default function Home() {
                 </div>
               )}
               
-              {showSuccess && !showToast && (
+              {showSuccess && (
                 <div className="text-center text-green-500 text-lg animate-fade-in">
-                  ✓ Shared! Processing rewards...
+                  ✓ Reward claimed successfully!
                 </div>
               )}
             </div>
@@ -210,16 +203,6 @@ export default function Home() {
           </div>
         )}
       </div>
-
-      {showToast && claimedRewards.length > 0 && (
-        <RewardToast
-          rewards={claimedRewards}
-          onClose={() => {
-            setShowToast(false);
-            setClaimedRewards([]);
-          }}
-        />
-      )}
     </main>
   );
 }
