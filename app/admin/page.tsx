@@ -15,7 +15,7 @@ export default function AdminPage() {
   const { address, isConnected, isConnecting } = useAccount();
   const { writeContractAsync } = useWriteContract();
   
-  const [activeTab, setActiveTab] = useState<'overview' | 'rewards' | 'distribution' | 'access' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'setup' | 'overview' | 'rewards' | 'distribution' | 'access' | 'settings'>('setup');
   const [isUpdating, setIsUpdating] = useState(false);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -277,7 +277,7 @@ export default function AdminPage() {
         </div>
 
         <div className="flex gap-2 border-b border-white/10 overflow-x-auto">
-          {['overview', 'rewards', 'distribution', 'access', 'settings'].map((tab) => (
+          {['setup', 'overview', 'rewards', 'distribution', 'access', 'settings'].map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab as any)}
@@ -287,10 +287,115 @@ export default function AdminPage() {
                   : 'text-gray-500 hover:text-gray-300'
               }`}
             >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab === 'setup' && '⚡ '}{tab.charAt(0).toUpperCase() + tab.slice(1)}
             </button>
           ))}
         </div>
+
+        {activeTab === 'setup' && (
+          <div className="space-y-6">
+            <div className="bg-gradient-to-r from-purple-500/20 to-blue-500/20 p-6 rounded-lg border border-purple-500/50">
+              <h2 className="text-3xl font-light mb-4">🚀 Quick Setup Guide</h2>
+              <p className="text-gray-300 mb-6">Follow these steps IN ORDER to set up your reward system correctly:</p>
+              
+              <div className="space-y-4">
+                <div className="bg-black/50 p-4 rounded-lg border border-white/10">
+                  <div className="flex items-start gap-4">
+                    <div className="text-3xl font-bold text-green-500">1</div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-medium mb-2">Add Reward Configuration FIRST</h3>
+                      <p className="text-gray-400 mb-3">Go to the "Rewards" tab and add your reward details (token address, amount per claim, etc.)</p>
+                      <div className="bg-red-500/20 border border-red-500/50 p-3 rounded">
+                        <p className="text-red-300 text-sm">⚠️ <strong>CRITICAL:</strong> Do this BEFORE sending tokens to the contract!</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-black/50 p-4 rounded-lg border border-white/10">
+                  <div className="flex items-start gap-4">
+                    <div className="text-3xl font-bold text-blue-500">2</div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-medium mb-2">Transfer Tokens to Contract</h3>
+                      <p className="text-gray-400 mb-3">Send tokens directly from the token contract to your reward contract:</p>
+                      
+                      <div className="bg-white/5 p-4 rounded border border-white/10 space-y-3">
+                        <div>
+                          <p className="text-sm text-gray-400 mb-2">Your Multi-Reward Contract:</p>
+                          <code className="text-xs bg-black p-2 rounded block font-mono">{CONTRACT_ADDRESS}</code>
+                        </div>
+                        
+                        <div className="border-t border-white/10 pt-3">
+                          <p className="text-sm font-medium mb-2">How to Transfer:</p>
+                          <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside">
+                            <li>Go to your token contract on BaseScan</li>
+                            <li>Click "Write Contract"</li>
+                            <li>Connect your wallet</li>
+                            <li>Find the <code className="bg-white/10 px-1 rounded">transfer</code> function</li>
+                            <li>Enter:
+                              <div className="ml-6 mt-1 space-y-1">
+                                <div><code className="bg-white/10 px-1 rounded text-xs">to:</code> {CONTRACT_ADDRESS}</div>
+                                <div><code className="bg-white/10 px-1 rounded text-xs">amount:</code> tokens × 10^18 (e.g., 20000000000000000000000 for 20k tokens)</div>
+                              </div>
+                            </li>
+                            <li>Click "Write" and approve transaction</li>
+                          </ol>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-black/50 p-4 rounded-lg border border-white/10">
+                  <div className="flex items-start gap-4">
+                    <div className="text-3xl font-bold text-purple-500">3</div>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-medium mb-2">Verify & Test</h3>
+                      <p className="text-gray-400 mb-3">Check that everything is working:</p>
+                      <ul className="text-sm text-gray-300 space-y-1 list-disc list-inside">
+                        <li>Verify tokens are in the contract (check BaseScan)</li>
+                        <li>Verify reward shows as "Active" in Rewards tab</li>
+                        <li>Test with a different wallet to claim</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-yellow-500/20 p-4 rounded-lg border border-yellow-500/50">
+              <h3 className="text-lg font-medium mb-2">⚠️ Common Mistakes to Avoid:</h3>
+              <ul className="text-sm text-gray-300 space-y-2 list-disc list-inside">
+                <li><strong>Sending tokens BEFORE adding reward config</strong> - This can cause all tokens to be sent in one claim!</li>
+                <li><strong>Using "approve" instead of "transfer"</strong> - Approve doesn't send tokens, it only gives permission</li>
+                <li><strong>Wrong decimal amount</strong> - Remember to multiply by 10^18 for most tokens</li>
+                <li><strong>Not checking contract balance</strong> - Always verify tokens arrived before going live</li>
+              </ul>
+            </div>
+
+            <div className="bg-white/5 p-6 rounded-lg border border-white/10">
+              <h3 className="text-xl font-medium mb-4">📊 Quick Links</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <a
+                  href={`https://basescan.org/address/${CONTRACT_ADDRESS}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-center"
+                >
+                  View Contract on BaseScan →
+                </a>
+                <a
+                  href={`https://basescan.org/address/${CONTRACT_ADDRESS}#tokentxns`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-3 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-center"
+                >
+                  View Token Transfers →
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
 
         {activeTab === 'overview' && (
           <div className="space-y-6">
@@ -354,7 +459,7 @@ export default function AdminPage() {
                 </div>
                 
                 <div>
-                  <label className="text-sm text-gray-400 mb-2 block">Amount (tokens)</label>
+                  <label className="text-sm text-gray-400 mb-2 block">Amount (tokens per claim)</label>
                   <input
                     type="number"
                     step="0.001"
@@ -383,7 +488,7 @@ export default function AdminPage() {
                     type="text"
                     value={newReward.name}
                     onChange={(e) => setNewReward({...newReward, name: e.target.value})}
-                    placeholder="Feyth Token"
+                    placeholder="Regent Token"
                     className="w-full bg-black border border-white/20 rounded p-3"
                   />
                 </div>
@@ -394,7 +499,7 @@ export default function AdminPage() {
                     type="text"
                     value={newReward.symbol}
                     onChange={(e) => setNewReward({...newReward, symbol: e.target.value})}
-                    placeholder="FEYTH"
+                    placeholder="REGENT"
                     className="w-full bg-black border border-white/20 rounded p-3"
                   />
                 </div>
@@ -445,7 +550,10 @@ export default function AdminPage() {
             <div className="bg-white/5 p-6 rounded-lg border border-white/10">
               <h2 className="text-2xl font-light mb-4">Active Rewards</h2>
               {!allRewards || allRewards.length === 0 ? (
-                <p className="text-gray-400">No rewards yet. Add one above!</p>
+                <div className="text-center py-8">
+                  <p className="text-gray-400 mb-4">No rewards configured yet.</p>
+                  <p className="text-sm text-yellow-400">⚠️ Add a reward above before funding the contract!</p>
+                </div>
               ) : (
                 <div className="space-y-3">
                   {allRewards.map((reward: any, index: number) => (
@@ -454,7 +562,7 @@ export default function AdminPage() {
                         <div>
                           <div className="font-medium text-lg">#{index} - {reward.name}</div>
                           <div className="text-sm text-gray-400">
-                            {reward.symbol} • {formatEther(reward.amount)} tokens
+                            {reward.symbol} • {formatEther(reward.amount)} tokens per claim
                           </div>
                           <div className="text-xs text-gray-500 font-mono">
                             {reward.tokenAddress.slice(0, 10)}...{reward.tokenAddress.slice(-8)}
@@ -488,6 +596,14 @@ export default function AdminPage() {
                         >
                           Remove
                         </button>
+                        <a
+                          href={`https://basescan.org/token/${reward.tokenAddress}?a=${CONTRACT_ADDRESS}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="px-3 py-1 text-xs bg-gray-600 rounded hover:bg-gray-700"
+                        >
+                          View Balance →
+                        </a>
                       </div>
                     </div>
                   ))}
