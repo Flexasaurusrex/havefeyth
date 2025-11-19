@@ -1,156 +1,93 @@
-// Feylon Contract Configuration
-export const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0xFb7797BAbeA65d4b8e4F8ff8591E78123974e5dd') as `0x${string}`;
-export const CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '8453');
+// Multi-Reward System Contract Configuration
+export const CONTRACT_ADDRESS = '0x1D0E95B387cE5054d2952116c937458fEEEe202b' as `0x${string}`;
+export const CHAIN_ID = 8453; // Base
 
-// Feylon ABI
-export const HAVE_FEYTH_ABI = [
+// Multi-Reward System Contract ABI
+export const HAVE_FEYTH_MULTI_REWARD_ABI = [
+  // Constructor (for reference only, not callable)
   {
     "inputs": [],
     "stateMutability": "nonpayable",
     "type": "constructor"
   },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "address", "name": "previousAdmin", "type": "address" },
-      { "indexed": false, "internalType": "address", "name": "newAdmin", "type": "address" }
-    ],
-    "name": "AdminChanged",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "owner", "type": "address" },
-      { "indexed": true, "internalType": "address", "name": "approved", "type": "address" },
-      { "indexed": true, "internalType": "uint256", "name": "tokenId", "type": "uint256" }
-    ],
-    "name": "Approval",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "beacon", "type": "address" }
-    ],
-    "name": "BeaconUpgraded",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "rewardId", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "newCooldown", "type": "uint256" }
-    ],
-    "name": "CooldownUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "previousOwner", "type": "address" },
-      { "indexed": true, "internalType": "address", "name": "newOwner", "type": "address" }
-    ],
-    "name": "OwnershipTransferred",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "address", "name": "account", "type": "address" }
-    ],
-    "name": "Paused",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "rewardId", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "rewardAmount", "type": "uint256" },
-      { "indexed": true, "internalType": "address", "name": "rewardToken", "type": "address" },
-      { "indexed": true, "internalType": "address", "name": "requiredToken", "type": "address" },
-      { "indexed": false, "internalType": "bool", "name": "isERC721", "type": "bool" },
-      { "indexed": false, "internalType": "uint256", "name": "startTime", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "endTime", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "maxClaims", "type": "uint256" }
-    ],
-    "name": "RewardAdded",
-    "type": "event"
-  },
+  
+  // Events
   {
     "anonymous": false,
     "inputs": [
       { "indexed": true, "internalType": "address", "name": "user", "type": "address" },
-      { "indexed": true, "internalType": "uint256", "name": "rewardId", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" },
-      { "indexed": true, "internalType": "address", "name": "rewardToken", "type": "address" }
+      { "indexed": false, "internalType": "tuple[]", "name": "rewards", "type": "tuple[]", "components": [
+        { "name": "tokenAddress", "type": "address" },
+        { "name": "rewardType", "type": "uint8" },
+        { "name": "amount", "type": "uint256" },
+        { "name": "tokenId", "type": "uint256" },
+        { "name": "name", "type": "string" },
+        { "name": "symbol", "type": "string" }
+      ]},
+      { "indexed": false, "internalType": "uint256", "name": "timestamp", "type": "uint256" }
     ],
-    "name": "RewardClaimed",
+    "name": "RewardsClaimed",
     "type": "event"
   },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "rewardId", "type": "uint256" }
-    ],
-    "name": "RewardDeleted",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "rewardId", "type": "uint256" },
-      { "indexed": false, "internalType": "bool", "name": "isActive", "type": "bool" }
-    ],
-    "name": "RewardToggled",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "rewardId", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "newRewardAmount", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "newRequiredTokenAmount", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "newStartTime", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "newEndTime", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "newMaxClaims", "type": "uint256" }
-    ],
-    "name": "RewardUpdated",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": false, "internalType": "address", "name": "account", "type": "address" }
-    ],
-    "name": "Unpaused",
-    "type": "event"
-  },
+  
+  // User Functions
   {
     "inputs": [],
-    "name": "CLAIMS_PER_HOUR",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "name": "claimReward",
+    "outputs": [
+      { "internalType": "tuple[]", "name": "claimDetails", "type": "tuple[]", "components": [
+        { "name": "tokenAddress", "type": "address" },
+        { "name": "rewardType", "type": "uint8" },
+        { "name": "amount", "type": "uint256" },
+        { "name": "tokenId", "type": "uint256" },
+        { "name": "name", "type": "string" },
+        { "name": "symbol", "type": "string" }
+      ]}
+    ],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "previewClaim",
+    "outputs": [
+      { "internalType": "tuple[]", "name": "", "type": "tuple[]", "components": [
+        { "name": "tokenAddress", "type": "address" },
+        { "name": "rewardType", "type": "uint8" },
+        { "name": "amount", "type": "uint256" },
+        { "name": "tokenId", "type": "uint256" },
+        { "name": "name", "type": "string" },
+        { "name": "symbol", "type": "string" }
+      ]}
+    ],
     "stateMutability": "view",
     "type": "function"
   },
   {
-    "inputs": [],
-    "name": "COOLDOWN",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "canClaim",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
     "stateMutability": "view",
     "type": "function"
   },
   {
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "timeUntilNextClaim",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  
+  // Reward Management
+  {
     "inputs": [
-      { "internalType": "uint256", "name": "rewardAmount", "type": "uint256" },
-      { "internalType": "uint256", "name": "requiredTokenAmount", "type": "uint256" },
-      { "internalType": "address", "name": "rewardToken", "type": "address" },
-      { "internalType": "address", "name": "requiredToken", "type": "address" },
-      { "internalType": "bool", "name": "isERC721", "type": "bool" },
-      { "internalType": "uint256", "name": "startTime", "type": "uint256" },
-      { "internalType": "uint256", "name": "endTime", "type": "uint256" },
-      { "internalType": "uint256", "name": "maxClaims", "type": "uint256" },
-      { "internalType": "uint256", "name": "cooldown", "type": "uint256" }
+      { "internalType": "address", "name": "tokenAddress", "type": "address" },
+      { "internalType": "enum HaveFeythMultiReward.RewardType", "name": "rewardType", "type": "uint8" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" },
+      { "internalType": "uint256", "name": "tokenId", "type": "uint256" },
+      { "internalType": "uint256", "name": "weight", "type": "uint256" },
+      { "internalType": "string", "name": "name", "type": "string" },
+      { "internalType": "string", "name": "symbol", "type": "string" }
     ],
     "name": "addReward",
     "outputs": [],
@@ -158,185 +95,10 @@ export const HAVE_FEYTH_ABI = [
     "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "uint256[]", "name": "rewardIds", "type": "uint256[]" },
-      { "internalType": "uint256[][]", "name": "tokenIdsArray", "type": "uint256[][]" }
-    ],
-    "name": "claimAllRewards",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "rewardId", "type": "uint256" },
-      { "internalType": "uint256[]", "name": "tokenIds", "type": "uint256[]" }
-    ],
-    "name": "claimReward",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "", "type": "address" },
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
-    "name": "claimedRewards",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "currentHourStart",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
     "inputs": [{ "internalType": "uint256", "name": "rewardId", "type": "uint256" }],
-    "name": "deleteReward",
+    "name": "removeReward",
     "outputs": [],
     "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getActiveRewards",
-    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getAllActiveRewardIds",
-    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "rewardId", "type": "uint256" }],
-    "name": "getRewardInfo",
-    "outputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "address", "name": "", "type": "address" },
-      { "internalType": "address", "name": "", "type": "address" },
-      { "internalType": "bool", "name": "", "type": "bool" },
-      { "internalType": "bool", "name": "", "type": "bool" },
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
-    "name": "getUserClaimedRewards",
-    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "user", "type": "address" },
-      { "internalType": "uint256", "name": "rewardId", "type": "uint256" }
-    ],
-    "name": "getUserClaimCount",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "user", "type": "address" },
-      { "internalType": "uint256", "name": "rewardId", "type": "uint256" }
-    ],
-    "name": "getUserRewardInfo",
-    "outputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "name": "hourlyClaimCount",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "name": "lastClaimTime",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "address", "name": "", "type": "address" },
-      { "internalType": "address", "name": "", "type": "address" },
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "bytes", "name": "", "type": "bytes" }
-    ],
-    "name": "onERC721Received",
-    "outputs": [{ "internalType": "bytes4", "name": "", "type": "bytes4" }],
-    "stateMutability": "pure",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "owner",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "pause",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "paused",
-    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "renounceOwnership",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "name": "rewards",
-    "outputs": [
-      { "internalType": "uint256", "name": "rewardAmount", "type": "uint256" },
-      { "internalType": "uint256", "name": "requiredTokenAmount", "type": "uint256" },
-      { "internalType": "address", "name": "rewardToken", "type": "address" },
-      { "internalType": "address", "name": "requiredToken", "type": "address" },
-      { "internalType": "bool", "name": "isERC721", "type": "bool" },
-      { "internalType": "bool", "name": "isActive", "type": "bool" },
-      { "internalType": "uint256", "name": "startTime", "type": "uint256" },
-      { "internalType": "uint256", "name": "endTime", "type": "uint256" },
-      { "internalType": "uint256", "name": "maxClaims", "type": "uint256" },
-      { "internalType": "uint256", "name": "totalClaims", "type": "uint256" },
-      { "internalType": "uint256", "name": "cooldown", "type": "uint256" },
-      { "internalType": "uint256", "name": "lastClaimTime", "type": "uint256" }
-    ],
-    "stateMutability": "view",
     "type": "function"
   },
   {
@@ -350,8 +112,154 @@ export const HAVE_FEYTH_ABI = [
     "type": "function"
   },
   {
-    "inputs": [{ "internalType": "address", "name": "newOwner", "type": "address" }],
-    "name": "transferOwnership",
+    "inputs": [
+      { "internalType": "uint256", "name": "rewardId", "type": "uint256" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "setRewardAmount",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "rewardId", "type": "uint256" },
+      { "internalType": "uint256", "name": "weight", "type": "uint256" }
+    ],
+    "name": "setRewardWeight",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  
+  // NFT Queue Management
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "rewardId", "type": "uint256" },
+      { "internalType": "uint256", "name": "tokenId", "type": "uint256" }
+    ],
+    "name": "addNFTToQueue",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "uint256", "name": "rewardId", "type": "uint256" },
+      { "internalType": "uint256[]", "name": "tokenIds", "type": "uint256[]" }
+    ],
+    "name": "batchAddNFTsToQueue",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "rewardId", "type": "uint256" }],
+    "name": "getNFTQueueLength",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "rewardId", "type": "uint256" }],
+    "name": "getNFTQueue",
+    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  
+  // Distribution Settings
+  {
+    "inputs": [{ "internalType": "enum HaveFeythMultiReward.DistributionMode", "name": "mode", "type": "uint8" }],
+    "name": "setDistributionMode",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "count", "type": "uint256" }],
+    "name": "setRandomSelectionCount",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "period", "type": "uint256" }],
+    "name": "setCooldownPeriod",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "max", "type": "uint256" }],
+    "name": "setMaxLifetimeClaimsPerUser",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "uint256", "name": "max", "type": "uint256" }],
+    "name": "setMaxClaimsPerHour",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  
+  // Access Control
+  {
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "addToBlacklist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "removeFromBlacklist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "addToWhitelist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "removeFromWhitelist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address[]", "name": "users", "type": "address[]" }],
+    "name": "batchAddToWhitelist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address[]", "name": "users", "type": "address[]" }],
+    "name": "batchAddToBlacklist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "bool", "name": "enabled", "type": "bool" }],
+    "name": "toggleWhitelist",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  
+  // Pause/Emergency
+  {
+    "inputs": [],
+    "name": "pause",
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
@@ -364,49 +272,9 @@ export const HAVE_FEYTH_ABI = [
     "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "uint256", "name": "rewardId", "type": "uint256" },
-      { "internalType": "uint256", "name": "newCooldown", "type": "uint256" }
-    ],
-    "name": "updateCooldown",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "rewardId", "type": "uint256" },
-      { "internalType": "uint256", "name": "newRewardAmount", "type": "uint256" },
-      { "internalType": "uint256", "name": "newRequiredTokenAmount", "type": "uint256" },
-      { "internalType": "uint256", "name": "newStartTime", "type": "uint256" },
-      { "internalType": "uint256", "name": "newEndTime", "type": "uint256" },
-      { "internalType": "uint256", "name": "newMaxClaims", "type": "uint256" }
-    ],
-    "name": "updateReward",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "address", "name": "", "type": "address" }
-    ],
-    "name": "userClaimCount",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "uint256", "name": "", "type": "uint256" },
-      { "internalType": "address", "name": "", "type": "address" }
-    ],
-    "name": "userRewardInfo",
-    "outputs": [
-      { "internalType": "uint256", "name": "lastClaimTime", "type": "uint256" },
-      { "internalType": "uint256", "name": "totalClaims", "type": "uint256" }
-    ],
+    "inputs": [],
+    "name": "paused",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
     "stateMutability": "view",
     "type": "function"
   },
@@ -421,10 +289,198 @@ export const HAVE_FEYTH_ABI = [
     "type": "function"
   },
   {
+    "inputs": [{ "internalType": "address", "name": "token", "type": "address" }],
+    "name": "withdrawAllERC20",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "nftContract", "type": "address" },
+      { "internalType": "uint256", "name": "tokenId", "type": "uint256" }
+    ],
+    "name": "withdrawNFT",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
+    "inputs": [
+      { "internalType": "address", "name": "token", "type": "address" },
+      { "internalType": "uint256", "name": "tokenId", "type": "uint256" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "withdrawERC1155",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  {
     "inputs": [],
     "name": "withdrawETH",
     "outputs": [],
     "stateMutability": "nonpayable",
+    "type": "function"
+  },
+  
+  // View Functions
+  {
+    "inputs": [],
+    "name": "owner",
+    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "distributionMode",
+    "outputs": [{ "internalType": "enum HaveFeythMultiReward.DistributionMode", "name": "", "type": "uint8" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "rewardCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "randomSelectionCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "cooldownPeriod",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "maxLifetimeClaimsPerUser",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "maxClaimsPerHour",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "whitelistEnabled",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "lastClaimTime",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "", "type": "address" }],
+    "name": "lifetimeClaimCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getActiveRewardCount",
+    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getAllActiveRewards",
+    "outputs": [
+      { "internalType": "tuple[]", "name": "", "type": "tuple[]", "components": [
+        { "name": "tokenAddress", "type": "address" },
+        { "name": "rewardType", "type": "uint8" },
+        { "name": "amount", "type": "uint256" },
+        { "name": "tokenId", "type": "uint256" },
+        { "name": "isActive", "type": "bool" },
+        { "name": "weight", "type": "uint256" },
+        { "name": "name", "type": "string" },
+        { "name": "symbol", "type": "string" }
+      ]}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getAllRewards",
+    "outputs": [
+      { "internalType": "tuple[]", "name": "", "type": "tuple[]", "components": [
+        { "name": "tokenAddress", "type": "address" },
+        { "name": "rewardType", "type": "uint8" },
+        { "name": "amount", "type": "uint256" },
+        { "name": "tokenId", "type": "uint256" },
+        { "name": "isActive", "type": "bool" },
+        { "name": "weight", "type": "uint256" },
+        { "name": "name", "type": "string" },
+        { "name": "symbol", "type": "string" }
+      ]}
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "getUserInfo",
+    "outputs": [
+      { "internalType": "uint256", "name": "_lastClaimTime", "type": "uint256" },
+      { "internalType": "uint256", "name": "_lifetimeClaimCount", "type": "uint256" },
+      { "internalType": "bool", "name": "_isBlacklisted", "type": "bool" },
+      { "internalType": "bool", "name": "_isWhitelisted", "type": "bool" },
+      { "internalType": "bool", "name": "_canClaim", "type": "bool" },
+      { "internalType": "uint256", "name": "_timeUntilNextClaim", "type": "uint256" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "getContractInfo",
+    "outputs": [
+      { "internalType": "enum HaveFeythMultiReward.DistributionMode", "name": "_mode", "type": "uint8" },
+      { "internalType": "uint256", "name": "_rewardCount", "type": "uint256" },
+      { "internalType": "uint256", "name": "_activeRewardCount", "type": "uint256" },
+      { "internalType": "uint256", "name": "_cooldownPeriod", "type": "uint256" },
+      { "internalType": "uint256", "name": "_maxLifetimeClaimsPerUser", "type": "uint256" },
+      { "internalType": "uint256", "name": "_maxClaimsPerHour", "type": "uint256" },
+      { "internalType": "uint256", "name": "_claimsThisHour", "type": "uint256" },
+      { "internalType": "bool", "name": "_isPaused", "type": "bool" },
+      { "internalType": "bool", "name": "_whitelistEnabled", "type": "bool" }
+    ],
+    "stateMutability": "view",
+    "type": "function"
+  },
+  
+  // Receive functions
+  {
+    "inputs": [
+      { "internalType": "address", "name": "", "type": "address" },
+      { "internalType": "address", "name": "", "type": "address" },
+      { "internalType": "uint256", "name": "", "type": "uint256" },
+      { "internalType": "bytes", "name": "", "type": "bytes" }
+    ],
+    "name": "onERC721Received",
+    "outputs": [{ "internalType": "bytes4", "name": "", "type": "bytes4" }],
+    "stateMutability": "pure",
     "type": "function"
   },
   {
@@ -432,3 +488,40 @@ export const HAVE_FEYTH_ABI = [
     "type": "receive"
   }
 ] as const;
+
+// TypeScript Enums
+export enum RewardType {
+  ERC20 = 0,
+  ERC721 = 1,
+  ERC1155 = 2
+}
+
+export enum DistributionMode {
+  ALL_REWARDS = 0,
+  RANDOM_SELECTION = 1,
+  WEIGHTED_RANDOM = 2
+}
+
+// Constants
+export const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
+export const CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '8453');
+
+// Helper labels
+export const REWARD_TYPE_LABELS = {
+  [RewardType.ERC20]: 'ERC20 Token',
+  [RewardType.ERC721]: 'NFT (ERC721)',
+  [RewardType.ERC1155]: 'Multi-Token (ERC1155)'
+};
+
+export const DISTRIBUTION_MODE_LABELS = {
+  [DistributionMode.ALL_REWARDS]: 'All Rewards',
+  [DistributionMode.RANDOM_SELECTION]: 'Random Selection',
+  [DistributionMode.WEIGHTED_RANDOM]: 'Weighted Random'
+};
+
+// Reward emojis for UI
+export const REWARD_TYPE_EMOJIS = {
+  [RewardType.ERC20]: '🪙',
+  [RewardType.ERC721]: '🖼️',
+  [RewardType.ERC1155]: '💎'
+};
