@@ -1,18 +1,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract } from 'wagmi';
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Image from 'next/image';
 import { canUserInteract, recordInteraction } from '@/lib/supabase';
-import { CONTRACT_ADDRESS, HAVE_FEYTH_ABI } from '@/lib/contract';
+import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI } from '@/lib/contract';
 import { formatDistanceToNow } from '@/lib/utils';
+import { RewardToast, type RewardItem } from '@/components/RewardToast';
 
 export const dynamic = 'force-dynamic';
 
 export default function Home() {
   const { address, isConnected } = useAccount();
-  const { writeContractAsync } = useWriteContract();
+  const { writeContractAsync, data: hash } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
   
   const [message, setMessage] = useState('');
   const [isGlowing, setIsGlowing] = useState(false);
@@ -21,6 +23,8 @@ export default function Home() {
   const [isSharing, setIsSharing] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState<'twitter' | 'farcaster' | null>(null);
+  const [claimedRewards, setClaimedRewards] = useState<RewardItem[]>([]);
+  const [showToast, setShowToast] = useState(false);
 
   useEffect(() => {
     async function checkCooldown() {
@@ -34,6 +38,17 @@ export default function Home() {
     checkCooldown();
   }, [address]);
 
+  useEffect(() => {
+    if (isConfirmed && claimedRewards.length > 0) {
+      setShowToast(true);
+      setShowSuccess(true);
+      
+      setTimeout(() => {
+        setShowSuccess(false);
+      }, 5000);
+    }
+  }, [isConfirmed, claimedRewards]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setMessage(e.target.value);
     setIsGlowing(e.target.value.length > 0);
@@ -46,7 +61,7 @@ export default function Home() {
     setIsSharing(true);
 
     try {
-      const shareText = `${message}\n\nShared with HAVE FEYTH 👁️\n${window.location.origin}`;
+      const shareText = `${message}\n\nCast your Feylon 👁️\n${window.location.origin}`;
       
       let shareLink = '';
       
@@ -70,20 +85,14 @@ export default function Home() {
       if (writeContractAsync) {
         await writeContractAsync({
           address: CONTRACT_ADDRESS,
-          abi: HAVE_FEYTH_ABI,
+          abi: HAVE_FEYTH_MULTI_REWARD_ABI,
           functionName: 'claimReward',
         });
       }
       
-      setShowSuccess(true);
       setMessage('');
       setIsGlowing(false);
       setCanInteract(false);
-      
-      setTimeout(() => {
-        setShowSuccess(false);
-        setSelectedPlatform(null);
-      }, 3000);
       
     } catch (error) {
       console.error('Error sharing:', error);
@@ -98,27 +107,31 @@ export default function Home() {
       <div className="w-full max-w-2xl mx-auto space-y-12 animate-fade-in">
         <div className="text-center space-y-8">
           <h1 className="text-8xl font-light tracking-wider text-glow">
-            HAVE FEYTH
+            FEYLON
           </h1>
           
           <div className={`flex justify-center transition-all duration-500 ${
             isGlowing ? 'animate-glow-pulse eye-glow-active' : 'eye-glow'
           }`}>
             <Image
-              src="/logo.png"
-              alt="Eye Logo"
+              src="/feylon-logo.png"
+              alt="Feylon Logo"
               width={200}
               height={200}
               className="select-none"
               priority
             />
           </div>
+          
+          <p className="text-xl text-gray-400 font-light">
+            Cast your Feylon
+          </p>
         </div>
 
         {!isConnected ? (
           <div className="text-center space-y-4">
             <p className="text-gray-400 text-lg">
-              Connect to share your message of goodwill
+              Connect to share your message
             </p>
             <div className="flex justify-center">
               <ConnectButton />
@@ -130,7 +143,7 @@ export default function Home() {
               <textarea
                 value={message}
                 onChange={handleInputChange}
-                placeholder="Share a message of goodwill or make a confession..."
+                placeholder="Share a message or make a confession..."
                 disabled={!canInteract || isSharing}
                 className="w-full h-32 bg-transparent border border-white/20 rounded-lg p-4 text-lg resize-none focus:outline-none focus:border-white/60 transition-colors placeholder:text-gray-600 disabled:opacity-50"
               />
@@ -145,24 +158,32 @@ export default function Home() {
                 <div className="flex gap-4 justify-center">
                   <button
                     onClick={() => handleShare('twitter')}
-                    disabled={isSharing}
+                    disabled={isSharing || isConfirming}
                     className="px-6 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSharing && selectedPlatform === 'twitter' ? 'Sharing...' : 'Share on 𝕏'}
+                    {isSharing && selectedPlatform === 'twitter' 
+                      ? 'Sharing...' 
+                      : isConfirming && selectedPlatform === 'twitter'
+                      ? 'Confirming...'
+                      : 'Share on 𝕏'}
                   </button>
                   <button
                     onClick={() => handleShare('farcaster')}
-                    disabled={isSharing}
+                    disabled={isSharing || isConfirming}
                     className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSharing && selectedPlatform === 'farcaster' ? 'Sharing...' : 'Share on Farcaster'}
+                    {isSharing && selectedPlatform === 'farcaster' 
+                      ? 'Sharing...' 
+                      : isConfirming && selectedPlatform === 'farcaster'
+                      ? 'Confirming...'
+                      : 'Share on Farcaster'}
                   </button>
                 </div>
               )}
               
-              {showSuccess && (
+              {showSuccess && !showToast && (
                 <div className="text-center text-green-500 text-lg animate-fade-in">
-                  ✓ Shared! Reward claimed successfully
+                  ✓ Shared! Processing rewards...
                 </div>
               )}
             </div>
@@ -189,6 +210,16 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {showToast && claimedRewards.length > 0 && (
+        <RewardToast
+          rewards={claimedRewards}
+          onClose={() => {
+            setShowToast(false);
+            setClaimedRewards([]);
+          }}
+        />
+      )}
     </main>
   );
 }
