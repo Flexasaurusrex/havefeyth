@@ -444,27 +444,8 @@ export const HAVE_FEYTH_MULTI_REWARD_ABI = [
     "outputs": [
       { "internalType": "uint256", "name": "_lastClaimTime", "type": "uint256" },
       { "internalType": "uint256", "name": "_lifetimeClaimCount", "type": "uint256" },
-      { "internalType": "bool", "name": "_isBlacklisted", "type": "bool" },
-      { "internalType": "bool", "name": "_isWhitelisted", "type": "bool" },
       { "internalType": "bool", "name": "_canClaim", "type": "bool" },
       { "internalType": "uint256", "name": "_timeUntilNextClaim", "type": "uint256" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "getContractInfo",
-    "outputs": [
-      { "internalType": "enum HaveFeythMultiReward.DistributionMode", "name": "_mode", "type": "uint8" },
-      { "internalType": "uint256", "name": "_rewardCount", "type": "uint256" },
-      { "internalType": "uint256", "name": "_activeRewardCount", "type": "uint256" },
-      { "internalType": "uint256", "name": "_cooldownPeriod", "type": "uint256" },
-      { "internalType": "uint256", "name": "_maxLifetimeClaimsPerUser", "type": "uint256" },
-      { "internalType": "uint256", "name": "_maxClaimsPerHour", "type": "uint256" },
-      { "internalType": "uint256", "name": "_claimsThisHour", "type": "uint256" },
-      { "internalType": "bool", "name": "_isPaused", "type": "bool" },
-      { "internalType": "bool", "name": "_whitelistEnabled", "type": "bool" }
     ],
     "stateMutability": "view",
     "type": "function"
@@ -502,10 +483,6 @@ export enum DistributionMode {
   WEIGHTED_RANDOM = 2
 }
 
-// Constants
-export const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || '0x0000000000000000000000000000000000000000') as `0x${string}`;
-export const CHAIN_ID = parseInt(process.env.NEXT_PUBLIC_CHAIN_ID || '8453');
-
 // Helper labels
 export const REWARD_TYPE_LABELS = {
   [RewardType.ERC20]: 'ERC20 Token',
@@ -514,14 +491,7 @@ export const REWARD_TYPE_LABELS = {
 };
 
 export const DISTRIBUTION_MODE_LABELS = {
-  [DistributionMode.ALL_REWARDS]: 'All Rewards',
+  [DistributionMode.ALL_REWARDS]: 'All Active Rewards',
   [DistributionMode.RANDOM_SELECTION]: 'Random Selection',
   [DistributionMode.WEIGHTED_RANDOM]: 'Weighted Random'
-};
-
-// Reward emojis for UI
-export const REWARD_TYPE_EMOJIS = {
-  [RewardType.ERC20]: '🪙',
-  [RewardType.ERC721]: '🖼️',
-  [RewardType.ERC1155]: '💎'
 };
