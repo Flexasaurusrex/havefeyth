@@ -305,7 +305,9 @@ export default function AdminPage() {
             </div>
             <div>
               <div className="text-sm text-gray-400 mb-1">Total Rewards</div>
-              <div className="text-2xl font-bold text-white">{rewardCount?.toString() || 0}</div>
+              <div className="text-2xl font-bold text-white">
+                {allRewards?.filter((r: any) => r.tokenAddress !== '0x0000000000000000000000000000000000000000').length || 0}
+              </div>
             </div>
             <div>
               <div className="text-sm text-gray-400 mb-1">Unique Users</div>
