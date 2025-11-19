@@ -12,12 +12,13 @@ export const dynamic = 'force-dynamic';
 
 export default function AdminPage() {
   const router = useRouter();
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, isConnecting } = useAccount();
   const { writeContractAsync } = useWriteContract();
   
   const [activeTab, setActiveTab] = useState<'overview' | 'rewards' | 'settings'>('overview');
   const [isUpdating, setIsUpdating] = useState(false);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
     totalInteractions: 0,
     uniqueUsers: 0,
@@ -59,11 +60,16 @@ export default function AdminPage() {
   });
 
   useEffect(() => {
-    if (!isConnected) {
-      router.push('/');
-      return;
-    }
-  }, [isConnected, router]);
+    // Wait a moment for wallet to connect before checking
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+      if (!isConnecting && !isConnected) {
+        router.push('/');
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [isConnected, isConnecting, router]);
 
   useEffect(() => {
     async function loadData() {
@@ -141,6 +147,17 @@ export default function AdminPage() {
       symbol: '',
     });
   };
+
+  if (isLoading || isConnecting) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin inline-block w-8 h-8 border-4 border-white/20 border-t-white rounded-full mb-4" />
+          <p className="text-gray-400">Loading admin panel...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!isConnected) return null;
 
