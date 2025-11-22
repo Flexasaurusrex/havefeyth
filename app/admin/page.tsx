@@ -89,7 +89,7 @@ export default function AdminPage() {
     functionName: 'randomSelectionCount',
   });
 
-  const { data: cooldownPeriod } = useReadContract({
+  const { data: cooldownPeriod, refetch: refetchCooldown } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
     functionName: 'cooldownPeriod',
@@ -158,21 +158,38 @@ export default function AdminPage() {
   ) => {
     setIsUpdating(true);
     try {
+      console.log('🔍 Calling contract function:', functionName, 'with args:', args);
+      
       await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_MULTI_REWARD_ABI,
         functionName: functionName as any,
         args: args as any,
       });
+      
       alert(successMessage);
       
       // Give blockchain time to update, then refetch
       setTimeout(() => {
         refetchRewards();
+        
+        // CRITICAL: Also refetch cooldown if we updated it
+        if (functionName === 'setCooldownPeriod') {
+          console.log('🔄 Refetching cooldown period...');
+          refetchCooldown();
+        }
       }, 2000);
     } catch (error: any) {
-      console.error(`Error calling ${functionName}:`, error);
-      alert(`Failed: ${error?.message || 'Unknown error'}`);
+      console.error(`❌ Error calling ${functionName}:`, error);
+      
+      // Better error messages
+      if (error?.message?.includes('user rejected')) {
+        alert('Transaction cancelled by user');
+      } else if (error?.message?.includes('Ownable')) {
+        alert('Failed: Only the contract owner can do this!');
+      } else {
+        alert(`Failed: ${error?.shortMessage || error?.message || 'Unknown error'}`);
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -761,9 +778,11 @@ export default function AdminPage() {
                     <div className="text-sm text-gray-300">Set cooldown to 0 for unlimited testing claims</div>
                   </div>
                   <button
-                    onClick={() => {
+                    onClick={async () => {
                       if (confirm('Enable testing mode? (Sets cooldown to 0 seconds)')) {
-                        executeContractCall('setCooldownPeriod', [BigInt(0)], 'Testing mode enabled! Cooldown set to 0.');
+                        console.log('🧪 Enabling testing mode...');
+                        console.log('Current cooldown:', cooldownPeriod?.toString());
+                        await executeContractCall('setCooldownPeriod', [BigInt(0)], 'Testing mode enabled! Cooldown set to 0 seconds. You can now claim unlimited times.');
                       }
                     }}
                     disabled={isUpdating || cooldownPeriod === BigInt(0)}
