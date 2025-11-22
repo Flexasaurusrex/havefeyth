@@ -14,6 +14,9 @@ export interface Interaction {
   claimed: boolean;
   created_at: string;
   claim_available_at: string;
+  display_name?: string;
+  twitter_handle?: string;
+  farcaster_handle?: string;
 }
 
 const isConfigured = () => {
@@ -60,7 +63,10 @@ export async function recordInteraction(
   walletAddress: string,
   message: string,
   platform: 'twitter' | 'farcaster',
-  shareLink: string
+  shareLink: string,
+  displayName?: string,
+  twitterHandle?: string,
+  farcasterHandle?: string
 ): Promise<{ success: boolean; error?: string }> {
   if (!isConfigured()) {
     return { success: false, error: 'Database not configured' };
@@ -77,6 +83,9 @@ export async function recordInteraction(
       share_link: shareLink,
       claimed: false,
       claim_available_at: claimAvailableAt.toISOString(),
+      display_name: displayName || null,
+      twitter_handle: twitterHandle || null,
+      farcaster_handle: farcasterHandle || null,
     },
   ]);
 
