@@ -122,9 +122,12 @@ export default function Home() {
       // Get actual claimed rewards from preview
       if (previewRewards && Array.isArray(previewRewards)) {
         const formattedRewards: RewardItem[] = previewRewards.map((reward: any) => ({
+          tokenAddress: reward.tokenAddress,
+          rewardType: reward.rewardType,
           name: reward.name,
           symbol: reward.symbol,
           amount: formatEther(reward.amount),
+          tokenId: reward.tokenId,
           type: reward.rewardType === 0 ? 'ERC20' : reward.rewardType === 1 ? 'ERC721' : 'ERC1155',
         }));
         setClaimedRewards(formattedRewards);
