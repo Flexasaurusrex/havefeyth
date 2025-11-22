@@ -40,6 +40,26 @@ export default function Home() {
     args: address ? [address] : undefined,
   });
 
+  // Check if user can claim from contract
+  const { data: canClaimFromContract } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'canClaim',
+    args: address ? [address] : undefined,
+  });
+
+  // Log eligibility
+  useEffect(() => {
+    if (address) {
+      console.log('🔍 Eligibility Check:', {
+        address,
+        canClaimFromContract,
+        canInteract,
+        previewRewards: previewRewards?.length || 0
+      });
+    }
+  }, [address, canClaimFromContract, canInteract, previewRewards]);
+
   useEffect(() => {
     async function checkCooldown() {
       if (!address) return;
@@ -104,6 +124,10 @@ export default function Home() {
     setShowShareConfirm(false);
 
     try {
+      console.log('🔍 Starting claim process...');
+      console.log('📍 Address:', address);
+      console.log('🎁 Preview rewards:', previewRewards);
+      
       // Record interaction in database
       await recordInteraction(
         address,
@@ -112,12 +136,17 @@ export default function Home() {
         shareUrl
       );
       
+      console.log('✅ Interaction recorded');
+      
       // NOW trigger wallet transaction (AFTER share confirmed)
-      await writeContractAsync({
+      console.log('💰 Calling claimReward...');
+      const result = await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_MULTI_REWARD_ABI,
         functionName: 'claimReward',
       });
+      
+      console.log('✅ Transaction sent:', result);
       
       // Get actual claimed rewards from preview
       if (previewRewards && Array.isArray(previewRewards)) {
@@ -139,11 +168,21 @@ export default function Home() {
       setCanInteract(false);
       
     } catch (error: any) {
-      console.error('Error claiming:', error);
+      console.error('❌ Error claiming:', error);
+      
+      // Better error messages
       if (error?.message?.includes('user rejected')) {
         alert('Transaction cancelled. You can try again!');
+      } else if (error?.message?.includes('insufficient funds')) {
+        alert('Contract has insufficient tokens! Contact admin.');
+      } else if (error?.message?.includes('Cooldown')) {
+        alert('You must wait before claiming again!');
+      } else if (error?.message?.includes('Blacklisted')) {
+        alert('This address is not eligible to claim.');
+      } else if (error?.message?.includes('paused')) {
+        alert('Contract is paused. Try again later.');
       } else {
-        alert('Error claiming rewards. Please try again.');
+        alert(`Error: ${error?.shortMessage || error?.message || 'Unknown error'}`);
       }
     } finally {
       setIsSharing(false);
@@ -282,6 +321,20 @@ export default function Home() {
               </div>
             )}
 
+            {canClaimFromContract === false && (
+              <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">⏰</span>
+                  <div className="text-sm">
+                    <div className="font-bold text-red-400 mb-1">Cooldown Active</div>
+                    <p className="text-gray-300">
+                      You must wait before claiming again. Check the admin panel to adjust cooldown for testing.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3">
               <button
                 onClick={handleCancelShare}
@@ -291,10 +344,14 @@ export default function Home() {
               </button>
               <button
                 onClick={handleClaimAfterShare}
-                disabled={isSharing || isConfirming}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50"
+                disabled={isSharing || isConfirming || canClaimFromContract === false}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSharing || isConfirming ? 'Claiming...' : 'Yes, I Shared! 🎁'}
+                {canClaimFromContract === false 
+                  ? '⏰ Cooldown Active'
+                  : isSharing || isConfirming 
+                  ? 'Claiming...' 
+                  : 'Yes, I Shared! 🎁'}
               </button>
             </div>
           </div>
