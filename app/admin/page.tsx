@@ -41,6 +41,8 @@ export default function AdminPage() {
     totalClaimed: 0,
   });
   
+  const [activityFilter, setActivityFilter] = useState<'all' | 'claims' | 'shares'>('all');
+  
   const [newReward, setNewReward] = useState({
     tokenAddress: '',
     rewardType: 0,
@@ -988,6 +990,209 @@ export default function AdminPage() {
         {/* STEP 3: MONITOR & DISTRIBUTE */}
         {currentStep === 3 && (
           <div className="space-y-6 animate-fadeIn">
+            {/* Claims Analytics */}
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-3xl font-bold mb-2">📊 Claims & Activity Log</h2>
+                  <p className="text-gray-400">
+                    View all blockchain transactions and user activity
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      const csv = [
+                        ['Type', 'User', 'Message', 'Platform', 'Timestamp'],
+                        ...interactions.map(i => [
+                          i.claimed ? 'Claim' : 'Share',
+                          i.wallet_address,
+                          i.message,
+                          i.shared_platform,
+                          new Date(i.created_at).toISOString()
+                        ])
+                      ].map(row => row.join(',')).join('\n');
+                      
+                      const blob = new Blob([csv], { type: 'text/csv' });
+                      const url = window.URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `feylon-activity-${new Date().toISOString().split('T')[0]}.csv`;
+                      a.click();
+                    }}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm transition-colors"
+                  >
+                    📥 Export CSV
+                  </button>
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
+              </div>
+
+              {/* Summary Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-1">Total Claims</div>
+                  <div className="text-3xl font-bold text-green-400">
+                    {interactions.filter(i => i.claimed).length}
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-1">Total Shares</div>
+                  <div className="text-3xl font-bold text-blue-400">
+                    {interactions.length}
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-1">Unique Users</div>
+                  <div className="text-3xl font-bold text-purple-400">
+                    {stats.uniqueUsers}
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-1">Claim Rate</div>
+                  <div className="text-3xl font-bold text-orange-400">
+                    {interactions.length > 0 
+                      ? Math.round((interactions.filter(i => i.claimed).length / interactions.length) * 100)
+                      : 0}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Filter Toggles */}
+              <div className="flex gap-2 mb-6 flex-wrap">
+                <button
+                  onClick={() => setActivityFilter('all')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activityFilter === 'all'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-white/10 hover:bg-white/20 text-gray-300'
+                  }`}
+                >
+                  📊 All Activity ({interactions.length})
+                </button>
+                <button
+                  onClick={() => setActivityFilter('claims')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activityFilter === 'claims'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-white/10 hover:bg-white/20 text-gray-300'
+                  }`}
+                >
+                  🎁 Claims Only ({interactions.filter(i => i.claimed).length})
+                </button>
+                <button
+                  onClick={() => setActivityFilter('shares')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activityFilter === 'shares'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-white/10 hover:bg-white/20 text-gray-300'
+                  }`}
+                >
+                  💬 Shares Only ({interactions.filter(i => !i.claimed).length})
+                </button>
+              </div>
+
+              {/* Activity Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-gray-400 border-b border-white/10">
+                    <tr>
+                      <th className="pb-3 px-2">Type</th>
+                      <th className="pb-3 px-2">User</th>
+                      <th className="pb-3 px-2">Details</th>
+                      <th className="pb-3 px-2">Timestamp</th>
+                      <th className="pb-3 px-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {interactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-gray-500">
+                          <div className="text-4xl mb-2">📭</div>
+                          No activity yet. Claims and shares will appear here.
+                        </td>
+                      </tr>
+                    ) : (
+                      interactions
+                        .filter(i => {
+                          if (activityFilter === 'claims') return i.claimed;
+                          if (activityFilter === 'shares') return !i.claimed;
+                          return true;
+                        })
+                        .map((interaction) => (
+                        <tr key={interaction.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="py-3 px-2">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              interaction.claimed 
+                                ? 'bg-green-500/20 text-green-400' 
+                                : 'bg-blue-500/20 text-blue-400'
+                            }`}>
+                              {interaction.claimed ? '🎁 Claimed' : '💬 Share'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-2">
+                            <div className="font-mono text-xs">
+                              {interaction.wallet_address.slice(0, 6)}...{interaction.wallet_address.slice(-4)}
+                            </div>
+                            <a
+                              href={`https://basescan.org/address/${interaction.wallet_address}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-gray-500 hover:text-white transition-colors"
+                            >
+                              View on BaseScan →
+                            </a>
+                          </td>
+                          <td className="py-3 px-2">
+                            <div className="max-w-xs truncate text-gray-300">{interaction.message}</div>
+                            <div className="text-xs text-gray-500 capitalize">
+                              via {interaction.shared_platform}
+                            </div>
+                          </td>
+                          <td className="py-3 px-2 text-xs text-gray-400">
+                            {new Date(interaction.created_at).toLocaleString()}
+                          </td>
+                          <td className="py-3 px-2">
+                            <button
+                              onClick={() => {
+                                if (confirm(`Ban address ${interaction.wallet_address}?\n\nThis will prevent them from claiming future rewards.`)) {
+                                  executeContractCall(
+                                    'addToBlacklist',
+                                    [interaction.wallet_address as `0x${string}`],
+                                    'Address banned!'
+                                  );
+                                }
+                              }}
+                              disabled={isUpdating}
+                              className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded text-xs font-medium transition-colors disabled:opacity-50"
+                            >
+                              🚫 Ban
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {interactions.length > 0 && (
+                <div className="mt-4 text-sm text-gray-500 text-center">
+                  Showing {interactions.filter(i => {
+                    if (activityFilter === 'claims') return i.claimed;
+                    if (activityFilter === 'shares') return !i.claimed;
+                    return true;
+                  }).length} of {interactions.length} total activities
+                </div>
+              )}
+            </div>
+
+            {/* Active Rewards Section */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
               <h2 className="text-3xl font-bold mb-2">📊 Step 3: Monitor & Distribute</h2>
               <p className="text-gray-400 mb-6">
