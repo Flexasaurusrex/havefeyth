@@ -1,655 +1,1040 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import Image from 'next/image';
-import { canUserInteract, recordInteraction, getAllInteractions } from '@/lib/supabase';
+import { useAccount, useReadContract, useWriteContract } from 'wagmi';
+import { useRouter } from 'next/navigation';
+import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI, RewardType, DistributionMode } from '@/lib/contract';
+import { getAllInteractions } from '@/lib/supabase';
 import type { Interaction } from '@/lib/supabase';
-import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI } from '@/lib/contract';
-import { formatDistanceToNow } from '@/lib/utils';
-import { RewardToast, type RewardItem } from '@/components/RewardToast';
-import { formatEther } from 'viem';
+import { formatEther, parseEther } from 'viem';
 
 export const dynamic = 'force-dynamic';
 
-export default function Home() {
-  const { address, isConnected } = useAccount();
-  const { writeContractAsync, data: hash } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
-  
-  const [message, setMessage] = useState('');
-  const [isGlowing, setIsGlowing] = useState(false);
-  const [canInteract, setCanInteract] = useState(true);
-  const [nextAvailable, setNextAvailable] = useState<string | null>(null);
-  const [isSharing, setIsSharing] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [selectedPlatform, setSelectedPlatform] = useState<'twitter' | 'farcaster' | null>(null);
-  const [claimedRewards, setClaimedRewards] = useState<RewardItem[]>([]);
-  const [showToast, setShowToast] = useState(false);
-  
-  // Share confirmation modal state
-  const [showShareConfirm, setShowShareConfirm] = useState(false);
-  const [shareUrl, setShareUrl] = useState('');
-  const [pendingMessage, setPendingMessage] = useState('');
+// ERC20 Transfer ABI
+const ERC20_TRANSFER_ABI = [
+  {
+    "inputs": [
+      { "internalType": "address", "name": "to", "type": "address" },
+      { "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "transfer",
+    "outputs": [{ "internalType": "bool", "name": "", "type": "bool" }],
+    "stateMutability": "nonpayable",
+    "type": "function"
+  }
+] as const;
 
-  // Social feed data
-  const [interactions, setInteractions] = useState<Interaction[]>([]);
+type WizardStep = 1 | 2 | 3;
+
+export default function AdminPage() {
+  const router = useRouter();
+  const { address, isConnected, isConnecting } = useAccount();
+  const { writeContractAsync } = useWriteContract();
   
-  // Profile setup state
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [profile, setProfile] = useState({
-    displayName: '',
-    twitterHandle: '',
-    farcasterHandle: '',
+  const [currentStep, setCurrentStep] = useState<WizardStep>(1);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [interactions, setInteractions] = useState<Interaction[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalInteractions: 0,
+    uniqueUsers: 0,
+    totalClaimed: 0,
+  });
+  
+  const [activityFilter, setActivityFilter] = useState<'all' | 'claims' | 'shares'>('all');
+  
+  // Whitelist state
+  const [whitelistAddress, setWhitelistAddress] = useState('');
+  const [checkWhitelistAddress, setCheckWhitelistAddress] = useState('');
+  const [whitelistCheckResult, setWhitelistCheckResult] = useState<boolean | null>(null);
+  
+  const [newReward, setNewReward] = useState({
+    tokenAddress: '',
+    rewardType: 0,
+    amount: '',
+    tokenId: '0',
+    weight: '50',
+    name: '',
+    symbol: '',
   });
 
-  // Preview what user will claim
-  const { data: previewRewards } = useReadContract({
+  const [fundingInput, setFundingInput] = useState({
+    tokenAddress: '',
+    amount: '',
+  });
+
+  // Read contract data
+  const { data: owner } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-    functionName: 'previewClaim',
-    args: address ? [address] : undefined,
+    functionName: 'owner',
   });
 
-  // Check if whitelist is enabled
-  const { data: whitelistEnabled } = useReadContract({
+  const { data: isPaused } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'paused',
+  });
+
+  const { data: rewardCount } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'rewardCount',
+  });
+
+  const { data: distributionMode } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'distributionMode',
+  });
+
+  const { data: randomSelectionCount } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'randomSelectionCount',
+  });
+
+  const { data: cooldownPeriod, refetch: refetchCooldown } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'cooldownPeriod',
+  });
+
+  const { data: maxLifetimeClaimsPerUser } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'maxLifetimeClaimsPerUser',
+  });
+
+  const { data: maxClaimsPerHour } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'maxClaimsPerHour',
+  });
+
+  const { data: whitelistEnabled, refetch: refetchWhitelistEnabled } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
     functionName: 'whitelistEnabled',
   });
 
-  // Check if user can claim from contract
-  const { data: canClaimFromContract } = useReadContract({
+  const { data: allRewards, refetch: refetchRewards } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-    functionName: 'canClaim',
-    args: address ? [address] : undefined,
+    functionName: 'getAllRewards',
   });
 
-  // ✅ DETERMINE IF WE SHOULD SHOW COOLDOWN WARNING
-  // If whitelist is enabled, don't show cooldown warning (let contract handle it)
-  const shouldShowCooldownWarning = !whitelistEnabled && canClaimFromContract === false;
-
-  // Log eligibility
   useEffect(() => {
-    if (address) {
-      console.log('🔍 Eligibility Check:', {
-        address,
-        whitelistEnabled,
-        canClaimFromContract,
-        shouldShowCooldownWarning,
-        canInteract,
-        previewRewards: previewRewards?.length || 0
-      });
-    }
-  }, [address, whitelistEnabled, canClaimFromContract, shouldShowCooldownWarning, canInteract, previewRewards]);
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+      if (!isConnecting && !isConnected) {
+        router.push('/');
+      }
+    }, 1000);
+
+    return () => clearTimeout(timer);
+  }, [isConnected, isConnecting, router]);
 
   useEffect(() => {
-    async function checkCooldown() {
-      if (!address) return;
-      
-      const status = await canUserInteract(address);
-      setCanInteract(status.canInteract);
-      setNextAvailable(status.nextAvailable || null);
-    }
-    
-    checkCooldown();
-  }, [address]);
-
-  // Load all interactions for social feed
-  useEffect(() => {
-    async function loadInteractions() {
+    async function loadData() {
       const data = await getAllInteractions();
       setInteractions(data);
+      
+      const uniqueUsers = new Set(data.map(i => i.wallet_address)).size;
+      const claimed = data.filter(i => i.claimed).length;
+      
+      setStats({
+        totalInteractions: data.length,
+        uniqueUsers,
+        totalClaimed: claimed,
+      });
     }
     
-    loadInteractions();
-    
-    // Auto-refresh every 10 seconds for real-time updates
-    const interval = setInterval(loadInteractions, 10000);
+    loadData();
+    const interval = setInterval(loadData, 10000);
     
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (isConfirmed && claimedRewards.length > 0) {
-      setShowToast(true);
-      setShowSuccess(true);
-      
-      setTimeout(() => {
-        setShowSuccess(false);
-      }, 5000);
-    }
-  }, [isConfirmed, claimedRewards]);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMessage(e.target.value);
-    setIsGlowing(e.target.value.length > 0);
-  };
-
-  // STEP 1: Open share window (NO WALLET YET!)
-  const handleShareClick = (platform: 'twitter' | 'farcaster') => {
-    if (!isConnected || !address || !message.trim()) return;
-    
-    setSelectedPlatform(platform);
-    setPendingMessage(message);
-
-    const shareText = `${message}\n\nShared with FEYLON 👁️\n${window.location.origin}`;
-    
-    let shareLink = '';
-    
-    if (platform === 'twitter') {
-      shareLink = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`;
-    } else {
-      shareLink = `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`;
-    }
-    
-    setShareUrl(shareLink);
-    
-    // Open share window FIRST
-    window.open(shareLink, '_blank', 'width=600,height=400');
-    
-    // Show confirmation modal AFTER (slight delay so window opens first)
-    setTimeout(() => {
-      setShowShareConfirm(true);
-    }, 500);
-  };
-
-  // STEP 2: User confirms they shared, NOW trigger wallet
-  const handleClaimAfterShare = async () => {
-    if (!address || !selectedPlatform) return;
-    
-    setIsSharing(true);
-    setShowShareConfirm(false);
-
+  const executeContractCall = async (
+    functionName: any,
+    args: any[],
+    successMessage: string
+  ) => {
+    setIsUpdating(true);
     try {
-      console.log('🔍 Starting claim process...');
-      console.log('📍 Address:', address);
-      console.log('🎁 Preview rewards:', previewRewards);
-      console.log('✅ Whitelist enabled:', whitelistEnabled);
+      console.log('🔍 Calling contract function:', functionName, 'with args:', args);
       
-      // Check if user has set profile - if not, show modal after share
-      const hasProfile = profile.displayName || profile.twitterHandle || profile.farcasterHandle;
-      
-      // Record interaction in database with profile data
-      await recordInteraction(
-        address,
-        pendingMessage,
-        selectedPlatform,
-        shareUrl,
-        profile.displayName || undefined,
-        profile.twitterHandle || undefined,
-        profile.farcasterHandle || undefined
-      );
-      
-      console.log('✅ Interaction recorded');
-      
-      // NOW trigger wallet transaction (AFTER share confirmed)
-      console.log('💰 Calling claimReward...');
-      const result = await writeContractAsync({
+      await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-        functionName: 'claimReward',
+        functionName: functionName as any,
+        args: args as any,
       });
       
-      console.log('✅ Transaction sent:', result);
+      alert(successMessage);
       
-      // Get actual claimed rewards from preview
-      if (previewRewards && Array.isArray(previewRewards)) {
-        const formattedRewards: RewardItem[] = previewRewards.map((reward: any) => ({
-          tokenAddress: reward.tokenAddress,
-          rewardType: reward.rewardType,
-          name: reward.name,
-          symbol: reward.symbol,
-          amount: formatEther(reward.amount),
-          tokenId: reward.tokenId,
-          type: reward.rewardType === 0 ? 'ERC20' : reward.rewardType === 1 ? 'ERC721' : 'ERC1155',
-        }));
-        setClaimedRewards(formattedRewards);
-      }
-      
-      setMessage('');
-      setPendingMessage('');
-      setIsGlowing(false);
-      setCanInteract(false);
-      
-      // Show profile modal if they haven't set one yet
-      if (!hasProfile) {
-        setTimeout(() => {
-          setShowProfileModal(true);
-        }, 2000); // Show after success toast
-      }
-      
+      // Give blockchain time to update, then refetch
+      setTimeout(() => {
+        refetchRewards();
+        
+        // Also refetch cooldown if we updated it
+        if (functionName === 'setCooldownPeriod') {
+          console.log('🔄 Refetching cooldown period...');
+          refetchCooldown();
+        }
+        
+        // Refetch whitelist status if we changed it
+        if (functionName === 'setWhitelistEnabled' || functionName === 'addToWhitelist' || functionName === 'removeFromWhitelist') {
+          console.log('🔄 Refetching whitelist status...');
+          refetchWhitelistEnabled();
+        }
+      }, 2000);
     } catch (error: any) {
-      console.error('❌ Error claiming:', error);
+      console.error(`❌ Error calling ${functionName}:`, error);
       
       // Better error messages
       if (error?.message?.includes('user rejected')) {
-        alert('Transaction cancelled. You can try again!');
-      } else if (error?.message?.includes('insufficient funds')) {
-        alert('Contract has insufficient tokens! Contact admin.');
-      } else if (error?.message?.includes('Cooldown')) {
-        alert('You must wait before claiming again!');
-      } else if (error?.message?.includes('Blacklisted')) {
-        alert('This address is not eligible to claim.');
-      } else if (error?.message?.includes('paused')) {
-        alert('Contract is paused. Try again later.');
+        alert('Transaction cancelled by user');
+      } else if (error?.message?.includes('Ownable')) {
+        alert('Failed: Only the contract owner can do this!');
       } else {
-        alert(`Error: ${error?.shortMessage || error?.message || 'Unknown error'}`);
+        alert(`Failed: ${error?.shortMessage || error?.message || 'Unknown error'}`);
       }
     } finally {
-      setIsSharing(false);
-      setSelectedPlatform(null);
+      setIsUpdating(false);
     }
   };
 
-  // Cancel if user didn't actually share
-  const handleCancelShare = () => {
-    setShowShareConfirm(false);
-    setIsSharing(false);
-    setSelectedPlatform(null);
-    setPendingMessage('');
+  const handleCheckWhitelist = async () => {
+    if (!checkWhitelistAddress) {
+      alert('Please enter an address');
+      return;
+    }
+    
+    try {
+      const result = await fetch(`https://base.blockscout.com/api/v2/smart-contracts/${CONTRACT_ADDRESS}/methods-read`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          method_id: 'isWhitelisted',
+          args: [checkWhitelistAddress]
+        })
+      });
+      
+      // For now, just trigger a contract read
+      setWhitelistCheckResult(null);
+      alert('Check the "Read Contract" tab on BaseScan to verify whitelist status for this address.');
+    } catch (error) {
+      console.error('Error checking whitelist:', error);
+      alert('Could not check whitelist status. Try BaseScan directly.');
+    }
   };
 
+  const handleFundContract = async () => {
+    if (!fundingInput.tokenAddress || !fundingInput.amount) {
+      alert('Please fill both fields');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const amountInWei = parseEther(fundingInput.amount);
+
+      await writeContractAsync({
+        address: fundingInput.tokenAddress as `0x${string}`,
+        abi: ERC20_TRANSFER_ABI,
+        functionName: 'transfer',
+        args: [CONTRACT_ADDRESS, amountInWei],
+      });
+
+      alert(`✅ Successfully transferred ${fundingInput.amount} tokens to the contract!`);
+      setFundingInput({ tokenAddress: '', amount: '' });
+      
+      const basescanUrl = `https://basescan.org/token/${fundingInput.tokenAddress}?a=${CONTRACT_ADDRESS}`;
+      if (confirm('Tokens sent! Open BaseScan to verify balance?')) {
+        window.open(basescanUrl, '_blank');
+      }
+    } catch (error: any) {
+      console.error('Error funding contract:', error);
+      
+      if (error?.message?.includes('user rejected')) {
+        alert('Transaction cancelled');
+      } else if (error?.message?.includes('insufficient funds')) {
+        alert('Insufficient token balance in your wallet');
+      } else {
+        alert(`Failed to transfer tokens: ${error?.message || 'Unknown error'}`);
+      }
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleAddReward = async () => {
+    if (!newReward.tokenAddress || !newReward.amount || !newReward.name || !newReward.symbol) {
+      alert('Please fill all required fields');
+      return;
+    }
+
+    const amountInWei = parseEther(newReward.amount);
+
+    await executeContractCall(
+      'addReward',
+      [
+        newReward.tokenAddress,
+        Number(newReward.rewardType),
+        amountInWei,
+        BigInt(newReward.tokenId),
+        BigInt(newReward.weight),
+        newReward.name,
+        newReward.symbol,
+      ],
+      'Reward added successfully!'
+    );
+
+    setNewReward({
+      tokenAddress: '',
+      rewardType: 0,
+      amount: '',
+      tokenId: '0',
+      weight: '50',
+      name: '',
+      symbol: '',
+    });
+  };
+
+  const formatTime = (seconds: bigint | undefined) => {
+    if (!seconds) return 'N/A';
+    const hours = Number(seconds) / 3600;
+    return `${hours.toFixed(1)} hours`;
+  };
+
+  const getDistributionModeLabel = (mode: number | undefined) => {
+    if (mode === undefined) return 'Unknown';
+    if (mode === 0) return 'All Rewards';
+    if (mode === 1) return 'Random Selection';
+    if (mode === 2) return 'Weighted Random';
+    return 'Unknown';
+  };
+
+  if (isLoading || isConnecting) {
+    return (
+      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+        <div className="text-center">
+          <div className="animate-spin inline-block w-12 h-12 border-4 border-white/20 border-t-purple-500 rounded-full mb-4" />
+          <p className="text-gray-300">Loading admin panel...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!isConnected) return null;
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-8">
-      <div className="w-full max-w-2xl mx-auto space-y-12 animate-fade-in">
-        <div className="text-center space-y-8">
-          <h1 className="text-8xl font-light tracking-wider text-glow">
-            FEYLON
-          </h1>
-          
-          <div className={`flex justify-center transition-all duration-500 ${
-            isGlowing ? 'animate-glow-pulse eye-glow-active' : 'eye-glow'
-          }`}>
-            <Image
-              src="/feylon-logo.png"
-              alt="Feylon Logo"
-              width={200}
-              height={200}
-              className="select-none"
-              priority
-            />
+    <main className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-4 md:p-8">
+      <div className="max-w-6xl mx-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
+              Feylon Control Center
+            </h1>
+            <p className="text-gray-400">Multi-Reward Distribution System</p>
           </div>
+          <a 
+            href="/" 
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors backdrop-blur-sm border border-white/10"
+          >
+            ← Home
+          </a>
         </div>
 
-        {!isConnected ? (
-          <div className="text-center space-y-4">
-            <p className="text-gray-400 text-lg">
-              Connect to share your message of goodwill
-            </p>
-            <div className="flex justify-center">
-              <ConnectButton />
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-6">
-              <textarea
-                value={message}
-                onChange={handleInputChange}
-                placeholder="Share a message of goodwill or make a confession..."
-                disabled={!canInteract || isSharing}
-                className="w-full h-32 bg-transparent border border-white/20 rounded-lg p-4 text-lg resize-none focus:outline-none focus:border-white/60 transition-colors placeholder:text-gray-600 disabled:opacity-50"
-              />
-              
-              {!canInteract && nextAvailable && (
-                <p className="text-yellow-500 text-center">
-                  Next interaction available {formatDistanceToNow(new Date(nextAvailable))}
-                </p>
-              )}
-              
-              {canInteract && message.trim() && (
-                <div className="flex gap-4 justify-center">
-                  <button
-                    onClick={() => handleShareClick('twitter')}
-                    disabled={isSharing || isConfirming}
-                    className="px-6 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Share on 𝕏
-                  </button>
-                  <button
-                    onClick={() => handleShareClick('farcaster')}
-                    disabled={isSharing || isConfirming}
-                    className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Share on Farcaster
-                  </button>
-                </div>
-              )}
-              
-              {showSuccess && !showToast && (
-                <div className="text-center text-green-500 text-lg animate-fade-in">
-                  ✓ Shared! Processing rewards...
-                </div>
-              )}
-            </div>
-
-            <div className="text-center space-y-2">
-              <p className="text-gray-500 text-sm">
-                Connected: {address?.slice(0, 6)}...{address?.slice(-4)}
-              </p>
-              <div className="flex justify-center">
-                <ConnectButton />
+        {/* Status Bar */}
+        <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-sm border border-white/10">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <div className="text-sm text-gray-400 mb-1">Contract Status</div>
+              <div className={`text-2xl font-bold ${isPaused ? 'text-red-400' : 'text-green-400'}`}>
+                {isPaused ? '⏸️ PAUSED' : '✅ ACTIVE'}
               </div>
             </div>
-          </>
-        )}
-
-        {isConnected && address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase() && (
-          <div className="text-center">
-            <a
-              href="/admin"
-              className="text-gray-500 hover:text-white transition-colors text-sm"
-            >
-              Admin Panel →
-            </a>
+            <div>
+              <div className="text-sm text-gray-400 mb-1">Total Rewards</div>
+              <div className="text-2xl font-bold text-white">
+                {allRewards?.filter((r: any) => r.tokenAddress !== '0x0000000000000000000000000000000000000000').length || 0}
+              </div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-400 mb-1">Unique Users</div>
+              <div className="text-2xl font-bold text-white">{stats.uniqueUsers}</div>
+            </div>
+            <div>
+              <div className="text-sm text-gray-400 mb-1">Whitelist</div>
+              <div className={`text-2xl font-bold ${whitelistEnabled ? 'text-green-400' : 'text-gray-400'}`}>
+                {whitelistEnabled ? '✓ Enabled' : '○ Disabled'}
+              </div>
+            </div>
           </div>
-        )}
-      </div>
-
-      {/* SOCIAL FEED - Other Users' Feylons */}
-      <div className="w-full max-w-6xl mx-auto mt-16 px-4 animate-fade-in">
-        <div className="text-center mb-8">
-          <h2 className="text-4xl font-light mb-2 text-glow">Recent Feylons</h2>
-          <p className="text-gray-500">See what others are sharing 👁️</p>
         </div>
 
-        {interactions.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-6xl mb-4">👁️</div>
-            <p className="text-gray-500">No Feylons yet. Be the first to share!</p>
+        {/* Progress Dots */}
+        <div className="flex justify-center items-center mb-8 space-x-4">
+          {[1, 2, 3].map((step) => (
+            <div key={step} className="flex items-center">
+              <button
+                onClick={() => setCurrentStep(step as WizardStep)}
+                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold transition-all ${
+                  currentStep === step
+                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white scale-110 shadow-lg'
+                    : currentStep > step
+                    ? 'bg-green-500 text-white'
+                    : 'bg-white/10 text-gray-400'
+                }`}
+              >
+                {currentStep > step ? '✓' : step}
+              </button>
+              {step < 3 && (
+                <div className={`w-16 md:w-32 h-1 mx-2 ${
+                  currentStep > step ? 'bg-green-500' : 'bg-white/10'
+                }`} />
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Step Labels */}
+        <div className="flex justify-center mb-8">
+          <div className="grid grid-cols-3 gap-8 md:gap-32 text-center">
+            <div className={currentStep === 1 ? 'text-white font-bold' : 'text-gray-500'}>
+              💰 Fund Contract
+            </div>
+            <div className={currentStep === 2 ? 'text-white font-bold' : 'text-gray-500'}>
+              ⚙️ Configure
+            </div>
+            <div className={currentStep === 3 ? 'text-white font-bold' : 'text-gray-500'}>
+              📊 Monitor
+            </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {interactions.slice(0, 12).map((feylon, index) => {
-              const displayName = feylon.display_name || 'Anon';
-              const hasProfile = feylon.display_name || feylon.twitter_handle || feylon.farcaster_handle;
-              
-              return (
-                <div
-                  key={feylon.id}
-                  className="group relative bg-gradient-to-br from-purple-900/20 to-pink-900/20 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-purple-500/50 transition-all duration-300 hover:scale-105 animate-fade-in"
-                  style={{ animationDelay: `${index * 0.1}s` }}
-                >
-                  <div className="absolute top-4 right-4 text-2xl opacity-50 group-hover:opacity-100 transition-opacity">
-                    👁️
-                  </div>
+        </div>
 
-                  <div className="mb-4">
-                    <div className="font-semibold text-white mb-1">
-                      {displayName}
-                    </div>
-                    
-                    {hasProfile && (
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {feylon.twitter_handle && (
-                          <a
-                            href={`https://twitter.com/${feylon.twitter_handle}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                          >
-                            𝕏 @{feylon.twitter_handle}
-                          </a>
-                        )}
-                        {feylon.farcaster_handle && (
-                          <a
-                            href={`https://warpcast.com/${feylon.farcaster_handle}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                          >
-                            🟪 @{feylon.farcaster_handle}
-                          </a>
-                        )}
-                      </div>
-                    )}
-                    
-                    <div className="font-mono text-xs text-gray-500 mb-1">
-                      {feylon.wallet_address.slice(0, 6)}...{feylon.wallet_address.slice(-4)}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span className={`px-2 py-1 rounded ${
-                        feylon.shared_platform === 'twitter' 
-                          ? 'bg-blue-500/20 text-blue-400' 
-                          : 'bg-purple-500/20 text-purple-400'
-                      }`}>
-                        {feylon.shared_platform === 'twitter' ? '𝕏' : '🟪'} {feylon.shared_platform}
-                      </span>
-                      <span>{new Date(feylon.created_at).toLocaleDateString()}</span>
-                    </div>
-                  </div>
+        {/* STEP 1: FUND CONTRACT */}
+        {currentStep === 1 && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* ERC20 Funding */}
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
+              <h2 className="text-3xl font-bold mb-2">💰 Step 1: Fund Your Contract</h2>
+              <p className="text-gray-400 mb-6">
+                Transfer tokens to the reward contract so they can be distributed to users.
+              </p>
 
-                  <div className="mb-6 min-h-[100px]">
-                    <p className="text-gray-300 text-sm leading-relaxed line-clamp-5">
-                      "{feylon.message}"
+              <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 p-4 rounded-xl border border-yellow-500/50 mb-6">
+                <div className="flex items-start gap-3">
+                  <span className="text-2xl">⚠️</span>
+                  <div>
+                    <div className="font-bold text-yellow-300 mb-1">DO THIS AFTER STEP 2!</div>
+                    <p className="text-sm text-gray-300">
+                      Configure your rewards (Step 2) BEFORE funding to prevent accidental over-distribution.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* ERC20 TOKEN FUNDING */}
+              <div className="mb-8">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <span>🪙</span> ERC20 Token Funding (Easy Way)
+                </h3>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Token Contract Address
+                    </label>
+                    <input
+                      type="text"
+                      value={fundingInput.tokenAddress}
+                      onChange={(e) => setFundingInput({...fundingInput, tokenAddress: e.target.value})}
+                      placeholder="0x... (e.g., your ERC20 token address)"
+                      className="w-full bg-black/50 border border-white/20 rounded-lg p-4 font-mono text-sm focus:border-purple-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Amount to Transfer
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={fundingInput.amount}
+                      onChange={(e) => setFundingInput({...fundingInput, amount: e.target.value})}
+                      placeholder="20000"
+                      className="w-full bg-black/50 border border-white/20 rounded-lg p-4 focus:border-purple-500 focus:outline-none transition-colors"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter in regular tokens (we'll automatically convert to wei)
                     </p>
                   </div>
 
-                  {feylon.claimed && (
-                    <div className="mb-3">
-                      <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full">
-                        ✓ Claimed Rewards
-                      </span>
-                    </div>
-                  )}
+                  <button
+                    onClick={handleFundContract}
+                    disabled={isUpdating || !fundingInput.tokenAddress || !fundingInput.amount}
+                    className="w-full px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                  >
+                    {isUpdating ? '⏳ Transferring...' : '💸 Transfer ERC20 Tokens to Contract'}
+                  </button>
+                </div>
+              </div>
 
+              <div className="mt-6 p-4 bg-blue-500/20 rounded-xl border border-blue-500/50">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">💡</span>
+                  <div className="text-sm text-gray-300">
+                    <div className="font-bold mb-1">Pro Tip:</div>
+                    After funding, click "View Balance →" on your reward in Step 3 to verify tokens arrived!
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                onClick={() => setCurrentStep(2)}
+                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                Next: Configure Rewards →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* STEP 2: CONFIGURE REWARDS */}
+        {currentStep === 2 && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Add New Reward */}
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
+              <h2 className="text-3xl font-bold mb-2">⚙️ Step 2: Configure Rewards</h2>
+              <p className="text-gray-400 mb-6">
+                Set up what rewards users get when they claim. You can have multiple rewards.
+              </p>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Token Address
+                    </label>
+                    <input
+                      type="text"
+                      value={newReward.tokenAddress}
+                      onChange={(e) => setNewReward({...newReward, tokenAddress: e.target.value})}
+                      placeholder="0x..."
+                      className="w-full bg-black/50 border border-white/20 rounded-lg p-3 font-mono text-sm focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Reward Type
+                    </label>
+                    <select
+                      value={newReward.rewardType}
+                      onChange={(e) => setNewReward({...newReward, rewardType: Number(e.target.value)})}
+                      className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                    >
+                      <option value={0}>ERC20 Token</option>
+                      <option value={1}>NFT (ERC721)</option>
+                      <option value={2}>ERC1155</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Amount Per Claim
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={newReward.amount}
+                    onChange={(e) => setNewReward({...newReward, amount: e.target.value})}
+                    placeholder="100"
+                    className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      value={newReward.name}
+                      onChange={(e) => setNewReward({...newReward, name: e.target.value})}
+                      placeholder="Regent Token"
+                      className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Symbol
+                    </label>
+                    <input
+                      type="text"
+                      value={newReward.symbol}
+                      onChange={(e) => setNewReward({...newReward, symbol: e.target.value})}
+                      placeholder="REGENT"
+                      className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              <button
+                onClick={handleAddReward}
+                disabled={isUpdating}
+                className="mt-6 w-full px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 shadow-lg"
+              >
+                {isUpdating ? 'Adding...' : '+ Add Reward'}
+              </button>
+            </div>
+
+            {/* Whitelist Management */}
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
+              <h3 className="text-2xl font-bold mb-4">🎯 Whitelist Management</h3>
+              <p className="text-gray-400 mb-6">
+                Whitelist addresses to bypass cooldown restrictions for testing.
+              </p>
+
+              {/* Whitelist Status */}
+              <div className="mb-6 p-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-xl border border-purple-500/50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-bold text-lg">Whitelist Status</div>
+                    <div className="text-sm text-gray-300">
+                      {whitelistEnabled ? '✓ Enabled - Whitelisted addresses bypass cooldown' : '○ Disabled - All users have cooldown'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => executeContractCall('setWhitelistEnabled', [!whitelistEnabled], `Whitelist ${!whitelistEnabled ? 'enabled' : 'disabled'}!`)}
+                    disabled={isUpdating}
+                    className={`px-6 py-3 font-bold rounded-lg transition-colors disabled:opacity-50 ${
+                      whitelistEnabled
+                        ? 'bg-red-600 hover:bg-red-700'
+                        : 'bg-green-600 hover:bg-green-700'
+                    }`}
+                  >
+                    {whitelistEnabled ? 'Disable Whitelist' : 'Enable Whitelist'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Add to Whitelist */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Add Address to Whitelist
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={whitelistAddress}
+                    onChange={(e) => setWhitelistAddress(e.target.value)}
+                    placeholder="0x... (wallet address)"
+                    className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 font-mono text-sm focus:border-purple-500 focus:outline-none"
+                  />
                   <button
                     onClick={() => {
-                      const authorCredit = hasProfile 
-                        ? `by ${displayName}${feylon.twitter_handle ? ` (@${feylon.twitter_handle})` : ''}`
-                        : `by Anon (${feylon.wallet_address.slice(0, 6)}...${feylon.wallet_address.slice(-4)})`;
-                      
-                      const shareText = `Check out this Feylon ${authorCredit}:\n\n"${feylon.message}"\n\nShared via FEYLON 👁️\n${window.location.origin}`;
-                      const encodedText = encodeURIComponent(shareText);
-                      
-                      const shareUrl = feylon.shared_platform === 'twitter'
-                        ? `https://twitter.com/intent/tweet?text=${encodedText}`
-                        : `https://warpcast.com/~/compose?text=${encodedText}`;
-                      
-                      window.open(shareUrl, '_blank', 'width=600,height=400');
+                      if (!whitelistAddress) {
+                        alert('Please enter an address');
+                        return;
+                      }
+                      executeContractCall('addToWhitelist', [whitelistAddress as `0x${string}`], 'Address added to whitelist!');
+                      setWhitelistAddress('');
                     }}
-                    className="w-full px-4 py-2 bg-gradient-to-r from-purple-600/50 to-pink-600/50 hover:from-purple-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg transition-all backdrop-blur-sm border border-white/10 hover:border-white/30"
+                    disabled={isUpdating || !whitelistAddress}
+                    className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
                   >
-                    🔄 Share This Feylon
+                    Add
                   </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  This address will bypass cooldown restrictions
+                </p>
+              </div>
 
-                  <div className="mt-2 text-center text-xs text-gray-600">
-                    <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      ⭐ Earn points (coming soon)
+              {/* Remove from Whitelist */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Remove Address from Whitelist
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="0x... (wallet address)"
+                    id="removeWhitelistAddress"
+                    className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 font-mono text-sm focus:border-purple-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      const input = document.getElementById('removeWhitelistAddress') as HTMLInputElement;
+                      if (!input.value) {
+                        alert('Please enter an address');
+                        return;
+                      }
+                      executeContractCall('removeFromWhitelist', [input.value as `0x${string}`], 'Address removed from whitelist!');
+                      input.value = '';
+                    }}
+                    disabled={isUpdating}
+                    className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+
+              {/* Check Whitelist Status */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">
+                  Check if Address is Whitelisted
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={checkWhitelistAddress}
+                    onChange={(e) => setCheckWhitelistAddress(e.target.value)}
+                    placeholder="0x... (wallet address)"
+                    className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 font-mono text-sm focus:border-purple-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={handleCheckWhitelist}
+                    disabled={!checkWhitelistAddress}
+                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    Check
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Or check on <a href={`https://basescan.org/address/${CONTRACT_ADDRESS}#readContract`} target="_blank" className="text-blue-400 hover:text-blue-300">BaseScan Read Contract</a>
+                </p>
+              </div>
+            </div>
+
+            {/* Distribution Settings */}
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
+              <h3 className="text-2xl font-bold mb-4">Distribution Settings</h3>
+              <p className="text-gray-400 mb-6">Choose how rewards are given to users:</p>
+
+              <div className="space-y-6">
+                {/* Distribution Mode */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-3">
+                    Distribution Mode
+                    <span className="ml-2 text-xs text-gray-500">
+                      Current: {getDistributionModeLabel(Number(distributionMode))}
                     </span>
+                  </label>
+                  
+                  <div className="grid grid-cols-1 gap-3">
+                    <div 
+                      onClick={() => executeContractCall('setDistributionMode', [0], 'Distribution mode set to All Rewards!')}
+                      className="p-4 bg-black/50 border border-white/20 rounded-lg cursor-pointer hover:border-purple-500 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="text-2xl">🎁</div>
+                        <div className="flex-1">
+                          <div className="font-bold mb-1">All Rewards</div>
+                          <div className="text-sm text-gray-400">
+                            Users get ALL active rewards when they claim.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div 
+                      onClick={() => executeContractCall('setDistributionMode', [1], 'Distribution mode set to Random Selection!')}
+                      className="p-4 bg-black/50 border border-white/20 rounded-lg cursor-pointer hover:border-purple-500 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="text-2xl">🎲</div>
+                        <div className="flex-1">
+                          <div className="font-bold mb-1">Random Selection</div>
+                          <div className="text-sm text-gray-400">
+                            Users get X random rewards.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div 
+                      onClick={() => executeContractCall('setDistributionMode', [2], 'Distribution mode set to Weighted Random!')}
+                      className="p-4 bg-black/50 border border-white/20 rounded-lg cursor-pointer hover:border-purple-500 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="text-2xl">⚖️</div>
+                        <div className="flex-1">
+                          <div className="font-bold mb-1">Weighted Random</div>
+                          <div className="text-sm text-gray-400">
+                            Higher weight rewards are more likely.
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              );
-            })}
+
+                {/* Cooldown Period */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Cooldown Period
+                    <span className="ml-2 text-xs text-gray-500">
+                      Current: {formatTime(cooldownPeriod)}
+                    </span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      id="cooldown"
+                      placeholder="86400"
+                      defaultValue={cooldownPeriod?.toString()}
+                      className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById('cooldown') as HTMLInputElement;
+                        if (input.value) {
+                          executeContractCall('setCooldownPeriod', [BigInt(input.value)], 'Cooldown updated!');
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Time in seconds between claims. 86400 = 24 hours. Note: Contract may have minimum requirements.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-between">
+              <button
+                onClick={() => setCurrentStep(1)}
+                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                ← Back: Fund Contract
+              </button>
+              <button
+                onClick={() => setCurrentStep(3)}
+                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                Next: Monitor & Distribute →
+              </button>
+            </div>
           </div>
         )}
 
-        {interactions.length > 12 && (
-          <div className="text-center mt-8">
-            <button className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
-              Load More Feylons
-            </button>
+        {/* STEP 3: MONITOR & DISTRIBUTE */}
+        {currentStep === 3 && (
+          <div className="space-y-6 animate-fadeIn">
+            {/* Claims Analytics */}
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-3xl font-bold mb-2">📊 Claims & Activity Log</h2>
+                  <p className="text-gray-400">
+                    View all user activity
+                  </p>
+                </div>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
+                  >
+                    🔄 Refresh
+                  </button>
+              </div>
+
+              {/* Summary Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-1">Total Claims</div>
+                  <div className="text-3xl font-bold text-green-400">
+                    {interactions.filter(i => i.claimed).length}
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-1">Total Shares</div>
+                  <div className="text-3xl font-bold text-blue-400">
+                    {interactions.length}
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-1">Unique Users</div>
+                  <div className="text-3xl font-bold text-purple-400">
+                    {stats.uniqueUsers}
+                  </div>
+                </div>
+                <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-lg p-4">
+                  <div className="text-sm text-gray-400 mb-1">Claim Rate</div>
+                  <div className="text-3xl font-bold text-orange-400">
+                    {interactions.length > 0 
+                      ? Math.round((interactions.filter(i => i.claimed).length / interactions.length) * 100)
+                      : 0}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Activity Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-left text-gray-400 border-b border-white/10">
+                    <tr>
+                      <th className="pb-3 px-2">Type</th>
+                      <th className="pb-3 px-2">User</th>
+                      <th className="pb-3 px-2">Details</th>
+                      <th className="pb-3 px-2">Timestamp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {interactions.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="py-8 text-center text-gray-500">
+                          <div className="text-4xl mb-2">📭</div>
+                          No activity yet.
+                        </td>
+                      </tr>
+                    ) : (
+                      interactions.slice(0, 20).map((interaction) => (
+                        <tr key={interaction.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                          <td className="py-3 px-2">
+                            <span className={`px-2 py-1 rounded text-xs font-medium ${
+                              interaction.claimed 
+                                ? 'bg-green-500/20 text-green-400' 
+                                : 'bg-blue-500/20 text-blue-400'
+                            }`}>
+                              {interaction.claimed ? '🎁 Claimed' : '💬 Share'}
+                            </span>
+                          </td>
+                          <td className="py-3 px-2">
+                            <div className="font-mono text-xs">
+                              {interaction.wallet_address.slice(0, 6)}...{interaction.wallet_address.slice(-4)}
+                            </div>
+                          </td>
+                          <td className="py-3 px-2">
+                            <div className="max-w-xs truncate text-gray-300">{interaction.message}</div>
+                          </td>
+                          <td className="py-3 px-2 text-xs text-gray-400">
+                            {new Date(interaction.created_at).toLocaleString()}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Active Rewards Section */}
+            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
+              <h2 className="text-3xl font-bold mb-2">Active Rewards</h2>
+              
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold">Configured Rewards</h3>
+                  <button
+                    onClick={() => {
+                      refetchRewards();
+                      alert('Refreshed! ✅');
+                    }}
+                    className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
+                  >
+                    🔄 Refresh
+                  </button>
+                </div>
+                {!allRewards || allRewards.length === 0 || allRewards.every((r: any) => r.tokenAddress === '0x0000000000000000000000000000000000000000') ? (
+                  <div className="text-center py-12 bg-black/30 rounded-xl">
+                    <div className="text-4xl mb-4">🎁</div>
+                    <p className="text-gray-400 mb-2">No rewards configured yet.</p>
+                    <p className="text-sm text-gray-500">Go to Step 2 to add your first reward!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {allRewards
+                      .map((reward: any, originalIndex: number) => ({ reward, originalIndex }))
+                      .filter(({ reward }: any) => reward.tokenAddress !== '0x0000000000000000000000000000000000000000')
+                      .map(({ reward, originalIndex }: any) => (
+                      <div 
+                        key={originalIndex} 
+                        className="p-5 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl border border-white/10 hover:border-white/20 transition-colors"
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="text-2xl font-bold">#{originalIndex}</div>
+                              <div>
+                                <div className="font-bold text-lg">{reward.name}</div>
+                                <div className="text-sm text-gray-400">{reward.symbol}</div>
+                              </div>
+                            </div>
+                            <div className="text-sm text-gray-300 mb-1">
+                              💰 {formatEther(reward.amount)} per claim
+                            </div>
+                          </div>
+                          <div className={`px-4 py-2 rounded-lg font-bold ${
+                            reward.isActive 
+                              ? 'bg-green-500/20 text-green-400' 
+                              : 'bg-gray-500/20 text-gray-400'
+                          }`}>
+                            {reward.isActive ? '✓ Active' : '○ Inactive'}
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            onClick={() => executeContractCall('toggleReward', [BigInt(originalIndex), !reward.isActive], `Reward ${!reward.isActive ? 'activated' : 'deactivated'}!`)}
+                            disabled={isUpdating}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium disabled:opacity-50"
+                          >
+                            {reward.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <a
+                            href={`https://basescan.org/token/${reward.tokenAddress}?a=${CONTRACT_ADDRESS}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm font-medium"
+                          >
+                            View Balance →
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-start">
+              <button
+                onClick={() => setCurrentStep(2)}
+                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+              >
+                ← Back: Configure
+              </button>
+            </div>
           </div>
         )}
       </div>
 
-      {/* SHARE CONFIRMATION MODAL */}
-      {showShareConfirm && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-          <div className="bg-gradient-to-br from-purple-900 to-black border border-purple-500/50 rounded-2xl p-8 max-w-md mx-4 space-y-6 animate-scale-in">
-            <div className="text-center">
-              <div className="text-6xl mb-4">👁️</div>
-              <h2 className="text-3xl font-bold mb-2">Did you share?</h2>
-              <p className="text-gray-400">
-                Click "Yes, I Shared!" to claim your rewards
-              </p>
-            </div>
-
-            {previewRewards && previewRewards.length > 0 && (
-              <div className="bg-black/50 rounded-lg p-4 border border-white/10">
-                <div className="text-sm text-gray-400 mb-2">You'll receive:</div>
-                {previewRewards.map((reward: any, i: number) => (
-                  <div key={i} className="flex items-center justify-between py-2">
-                    <span className="font-medium">{reward.name}</span>
-                    <span className="text-green-400">
-                      {formatEther(reward.amount)} {reward.symbol}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* ✅ ONLY SHOW WARNING IF NOT WHITELISTED */}
-            {shouldShowCooldownWarning && (
-              <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">⏰</span>
-                  <div className="text-sm">
-                    <div className="font-bold text-red-400 mb-1">Cooldown Active</div>
-                    <p className="text-gray-300">
-                      You must wait before claiming again. Check the admin panel to adjust cooldown for testing.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* ✅ SHOW WHITELISTED MESSAGE IF APPLICABLE */}
-            {whitelistEnabled && !shouldShowCooldownWarning && (
-              <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">✨</span>
-                  <div className="text-sm">
-                    <div className="font-bold text-green-400 mb-1">Testing Mode Active</div>
-                    <p className="text-gray-300">
-                      Whitelist enabled - you can claim multiple times!
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={handleCancelShare}
-                className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleClaimAfterShare}
-                disabled={isSharing || isConfirming}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isSharing || isConfirming 
-                  ? 'Claiming...' 
-                  : 'Yes, I Shared! 🎁'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showToast && claimedRewards.length > 0 && (
-        <RewardToast
-          rewards={claimedRewards}
-          onClose={() => {
-            setShowToast(false);
-            setClaimedRewards([]);
-          }}
-        />
-      )}
-
-      {/* PROFILE SETUP MODAL */}
-      {showProfileModal && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-          <div className="bg-gradient-to-br from-purple-900 to-black border border-purple-500/50 rounded-2xl p-8 max-w-md mx-4 space-y-6 animate-scale-in">
-            <div className="text-center">
-              <div className="text-6xl mb-4">👁️</div>
-              <h2 className="text-3xl font-bold mb-2">Set Your Feylon Identity</h2>
-              <p className="text-gray-400 text-sm">
-                Optional: Add your name and socials so others can find you
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Display Name</label>
-                <input
-                  type="text"
-                  value={profile.displayName}
-                  onChange={(e) => setProfile({ ...profile, displayName: e.target.value })}
-                  placeholder="e.g. CryptoVibe"
-                  className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500 transition-colors"
-                  maxLength={30}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Twitter Handle (optional)</label>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500">@</span>
-                  <input
-                    type="text"
-                    value={profile.twitterHandle}
-                    onChange={(e) => setProfile({ ...profile, twitterHandle: e.target.value.replace('@', '') })}
-                    placeholder="username"
-                    className="flex-1 bg-black/50 border border-white/20 rounded-lg px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors"
-                    maxLength={15}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm text-gray-400 mb-2">Farcaster Handle (optional)</label>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-500">@</span>
-                  <input
-                    type="text"
-                    value={profile.farcasterHandle}
-                    onChange={(e) => setProfile({ ...profile, farcasterHandle: e.target.value.replace('@', '') })}
-                    placeholder="username"
-                    className="flex-1 bg-black/50 border border-white/20 rounded-lg px-4 py-3 focus:outline-none focus:border-purple-500 transition-colors"
-                    maxLength={15}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowProfileModal(false)}
-                className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors"
-              >
-                Skip
-              </button>
-              <button
-                onClick={() => {
-                  setShowProfileModal(false);
-                }}
-                className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all"
-              >
-                Save Profile ✓
-              </button>
-            </div>
-
-            <p className="text-xs text-gray-500 text-center">
-              You can always share anonymously by skipping this step
-            </p>
-          </div>
-        </div>
-      )}
-
       <style jsx>{`
-        @keyframes scale-in {
-          from { transform: scale(0.9); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
-        .animate-scale-in {
-          animation: scale-in 0.3s ease-out;
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
         }
       `}</style>
     </main>
