@@ -52,6 +52,13 @@ export default function Home() {
     args: address ? [address] : undefined,
   });
 
+  // Check if whitelist is enabled
+  const { data: whitelistEnabled } = useReadContract({
+    address: CONTRACT_ADDRESS,
+    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+    functionName: 'whitelistEnabled',
+  });
+
   // Check if user can claim from contract
   const { data: canClaimFromContract } = useReadContract({
     address: CONTRACT_ADDRESS,
@@ -60,17 +67,23 @@ export default function Home() {
     args: address ? [address] : undefined,
   });
 
+  // ✅ DETERMINE IF WE SHOULD SHOW COOLDOWN WARNING
+  // If whitelist is enabled, don't show cooldown warning (let contract handle it)
+  const shouldShowCooldownWarning = !whitelistEnabled && canClaimFromContract === false;
+
   // Log eligibility
   useEffect(() => {
     if (address) {
       console.log('🔍 Eligibility Check:', {
         address,
+        whitelistEnabled,
         canClaimFromContract,
+        shouldShowCooldownWarning,
         canInteract,
         previewRewards: previewRewards?.length || 0
       });
     }
-  }, [address, canClaimFromContract, canInteract, previewRewards]);
+  }, [address, whitelistEnabled, canClaimFromContract, shouldShowCooldownWarning, canInteract, previewRewards]);
 
   useEffect(() => {
     async function checkCooldown() {
@@ -154,6 +167,7 @@ export default function Home() {
       console.log('🔍 Starting claim process...');
       console.log('📍 Address:', address);
       console.log('🎁 Preview rewards:', previewRewards);
+      console.log('✅ Whitelist enabled:', whitelistEnabled);
       
       // Check if user has set profile - if not, show modal after share
       const hasProfile = profile.displayName || profile.twitterHandle || profile.farcasterHandle;
@@ -350,7 +364,6 @@ export default function Home() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {interactions.slice(0, 12).map((feylon, index) => {
-              // Determine display name
               const displayName = feylon.display_name || 'Anon';
               const hasProfile = feylon.display_name || feylon.twitter_handle || feylon.farcaster_handle;
               
@@ -360,18 +373,15 @@ export default function Home() {
                   className="group relative bg-gradient-to-br from-purple-900/20 to-pink-900/20 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-purple-500/50 transition-all duration-300 hover:scale-105 animate-fade-in"
                   style={{ animationDelay: `${index * 0.1}s` }}
                 >
-                  {/* Eye Icon */}
                   <div className="absolute top-4 right-4 text-2xl opacity-50 group-hover:opacity-100 transition-opacity">
                     👁️
                   </div>
 
-                  {/* User Info */}
                   <div className="mb-4">
                     <div className="font-semibold text-white mb-1">
                       {displayName}
                     </div>
                     
-                    {/* Social handles if available */}
                     {hasProfile && (
                       <div className="flex flex-wrap gap-2 mb-2">
                         {feylon.twitter_handle && (
@@ -412,14 +422,12 @@ export default function Home() {
                     </div>
                   </div>
 
-                  {/* Message */}
                   <div className="mb-6 min-h-[100px]">
                     <p className="text-gray-300 text-sm leading-relaxed line-clamp-5">
                       "{feylon.message}"
                     </p>
                   </div>
 
-                  {/* Claimed Badge */}
                   {feylon.claimed && (
                     <div className="mb-3">
                       <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full">
@@ -428,7 +436,6 @@ export default function Home() {
                     </div>
                   )}
 
-                  {/* Share This Feylon Button */}
                   <button
                     onClick={() => {
                       const authorCredit = hasProfile 
@@ -449,7 +456,6 @@ export default function Home() {
                     🔄 Share This Feylon
                   </button>
 
-                  {/* Future Points Indicator */}
                   <div className="mt-2 text-center text-xs text-gray-600">
                     <span className="opacity-0 group-hover:opacity-100 transition-opacity">
                       ⭐ Earn points (coming soon)
@@ -461,7 +467,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* Load More */}
         {interactions.length > 12 && (
           <div className="text-center mt-8">
             <button className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
@@ -497,7 +502,8 @@ export default function Home() {
               </div>
             )}
 
-            {canClaimFromContract === false && (
+            {/* ✅ ONLY SHOW WARNING IF NOT WHITELISTED */}
+            {shouldShowCooldownWarning && (
               <div className="bg-red-500/20 border border-red-500/50 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <span className="text-xl">⏰</span>
@@ -505,6 +511,21 @@ export default function Home() {
                     <div className="font-bold text-red-400 mb-1">Cooldown Active</div>
                     <p className="text-gray-300">
                       You must wait before claiming again. Check the admin panel to adjust cooldown for testing.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ✅ SHOW WHITELISTED MESSAGE IF APPLICABLE */}
+            {whitelistEnabled && !shouldShowCooldownWarning && (
+              <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-xl">✨</span>
+                  <div className="text-sm">
+                    <div className="font-bold text-green-400 mb-1">Testing Mode Active</div>
+                    <p className="text-gray-300">
+                      Whitelist enabled - you can claim multiple times!
                     </p>
                   </div>
                 </div>
@@ -520,12 +541,10 @@ export default function Home() {
               </button>
               <button
                 onClick={handleClaimAfterShare}
-                disabled={isSharing || isConfirming || canClaimFromContract === false}
+                disabled={isSharing || isConfirming}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {canClaimFromContract === false 
-                  ? '⏰ Cooldown Active'
-                  : isSharing || isConfirming 
+                {isSharing || isConfirming 
                   ? 'Claiming...' 
                   : 'Yes, I Shared! 🎁'}
               </button>
@@ -610,7 +629,6 @@ export default function Home() {
               <button
                 onClick={() => {
                   setShowProfileModal(false);
-                  // Profile is already saved in the interaction record
                 }}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all"
               >
