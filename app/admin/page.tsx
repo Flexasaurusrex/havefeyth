@@ -363,10 +363,11 @@ export default function AdminPage() {
         {/* STEP 1: FUND CONTRACT */}
         {currentStep === 1 && (
           <div className="space-y-6 animate-fadeIn">
+            {/* ERC20 Funding */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
               <h2 className="text-3xl font-bold mb-2">💰 Step 1: Fund Your Contract</h2>
               <p className="text-gray-400 mb-6">
-                Transfer tokens from your wallet to the reward contract. These tokens will be distributed to users when they claim.
+                Transfer tokens to the reward contract so they can be distributed to users.
               </p>
 
               <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 p-4 rounded-xl border border-yellow-500/50 mb-6">
@@ -375,54 +376,208 @@ export default function AdminPage() {
                   <div>
                     <div className="font-bold text-yellow-300 mb-1">DO THIS AFTER STEP 2!</div>
                     <p className="text-sm text-gray-300">
-                      It's recommended to configure your rewards (Step 2) BEFORE funding the contract.
-                      This prevents accidental over-distribution.
+                      Configure your rewards (Step 2) BEFORE funding to prevent accidental over-distribution.
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Token Contract Address
-                  </label>
-                  <input
-                    type="text"
-                    value={fundingInput.tokenAddress}
-                    onChange={(e) => setFundingInput({...fundingInput, tokenAddress: e.target.value})}
-                    placeholder="0x... (e.g., your token address)"
-                    className="w-full bg-black/50 border border-white/20 rounded-lg p-4 font-mono text-sm focus:border-purple-500 focus:outline-none transition-colors"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    The ERC20 token address you want to distribute as rewards
-                  </p>
-                </div>
+              {/* ERC20 TOKEN FUNDING */}
+              <div className="mb-8">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <span>🪙</span> ERC20 Token Funding (Easy Way)
+                </h3>
                 
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Amount to Transfer
-                  </label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    value={fundingInput.amount}
-                    onChange={(e) => setFundingInput({...fundingInput, amount: e.target.value})}
-                    placeholder="20000"
-                    className="w-full bg-black/50 border border-white/20 rounded-lg p-4 focus:border-purple-500 focus:outline-none transition-colors"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">
-                    Enter in regular tokens (we'll automatically convert to wei)
-                  </p>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Token Contract Address
+                    </label>
+                    <input
+                      type="text"
+                      value={fundingInput.tokenAddress}
+                      onChange={(e) => setFundingInput({...fundingInput, tokenAddress: e.target.value})}
+                      placeholder="0x... (e.g., your ERC20 token address)"
+                      className="w-full bg-black/50 border border-white/20 rounded-lg p-4 font-mono text-sm focus:border-purple-500 focus:outline-none transition-colors"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Amount to Transfer
+                    </label>
+                    <input
+                      type="number"
+                      step="0.001"
+                      value={fundingInput.amount}
+                      onChange={(e) => setFundingInput({...fundingInput, amount: e.target.value})}
+                      placeholder="20000"
+                      className="w-full bg-black/50 border border-white/20 rounded-lg p-4 focus:border-purple-500 focus:outline-none transition-colors"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Enter in regular tokens (we'll automatically convert to wei)
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleFundContract}
+                    disabled={isUpdating || !fundingInput.tokenAddress || !fundingInput.amount}
+                    className="w-full px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                  >
+                    {isUpdating ? '⏳ Transferring...' : '💸 Transfer ERC20 Tokens to Contract'}
+                  </button>
+                </div>
+              </div>
+
+              {/* NFT FUNDING */}
+              <div className="border-t border-white/10 pt-8">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <span>🖼️</span> NFT (ERC721) Funding - Unique 1/1s
+                </h3>
+                
+                <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">ℹ️</span>
+                    <div className="text-sm">
+                      <div className="font-bold mb-1">For unique, one-of-a-kind NFTs</div>
+                      <p className="text-gray-300">
+                        Each NFT is distributed once. Perfect for original art, collectibles, etc.
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
-                <button
-                  onClick={handleFundContract}
-                  disabled={isUpdating || !fundingInput.tokenAddress || !fundingInput.amount}
-                  className="w-full px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-                >
-                  {isUpdating ? '⏳ Transferring...' : '💸 Transfer Tokens to Contract'}
-                </button>
+                <div className="space-y-4">
+                  <div className="bg-black/50 rounded-lg p-4 border border-white/10">
+                    <div className="font-medium mb-3">Step 1: Transfer NFTs to Contract</div>
+                    <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside ml-2">
+                      <li>Go to your NFT collection on BaseScan or OpenSea</li>
+                      <li>For each NFT you want to distribute:</li>
+                      <ul className="ml-6 mt-1 space-y-1">
+                        <li>• Transfer it to: <code className="bg-white/10 px-1 rounded text-xs">{CONTRACT_ADDRESS}</code></li>
+                      </ul>
+                      <li>Note down the token IDs you transferred</li>
+                    </ol>
+                  </div>
+
+                  <div className="bg-black/50 rounded-lg p-4 border border-white/10">
+                    <div className="font-medium mb-3">Step 2: Add Token IDs to Queue</div>
+                    <p className="text-sm text-gray-400 mb-3">
+                      After transferring NFTs, go to <strong>Step 2 → Rewards Tab → NFT Queue Management</strong> to add the token IDs.
+                    </p>
+                    <button
+                      onClick={() => setCurrentStep(2)}
+                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm transition-colors"
+                    >
+                      Go to NFT Queue Management →
+                    </button>
+                  </div>
+
+                  <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl">⚠️</span>
+                      <div className="text-sm">
+                        <div className="font-bold mb-1">Important for ERC721:</div>
+                        <ul className="text-gray-300 space-y-1 list-disc list-inside">
+                          <li>Each NFT is distributed once (first come, first served from queue)</li>
+                          <li>Make sure to add token IDs to queue AFTER transferring</li>
+                          <li>The contract must own the NFTs before distribution</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ERC-1155 FUNDING */}
+              <div className="border-t border-white/10 pt-8 mt-8">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <span>🎫</span> ERC-1155 Funding - Editions (Multiple Copies)
+                </h3>
+                
+                <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-3">
+                    <span className="text-xl">✨</span>
+                    <div className="text-sm">
+                      <div className="font-bold mb-1">For limited edition NFTs</div>
+                      <p className="text-gray-300">
+                        Everyone gets the same special edition NFT. Perfect for commemorative pieces, badges, event passes, etc.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="bg-black/50 rounded-lg p-4 border border-white/10">
+                    <div className="font-medium mb-3">Step 1: Transfer Editions to Contract</div>
+                    <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside ml-2">
+                      <li>Go to your ERC-1155 contract on BaseScan</li>
+                      <li>Click "Write Contract" → Connect wallet</li>
+                      <li>Find the <code className="bg-white/10 px-1 rounded text-xs">safeTransferFrom</code> function</li>
+                      <li>Fill in the parameters:</li>
+                      <ul className="ml-6 mt-2 space-y-1 bg-black/30 p-3 rounded">
+                        <li><code className="text-xs">from:</code> <span className="text-gray-400">Your wallet address</span></li>
+                        <li><code className="text-xs">to:</code> <code className="bg-white/10 px-1 rounded text-xs font-mono">{CONTRACT_ADDRESS}</code></li>
+                        <li><code className="text-xs">id:</code> <span className="text-gray-400">Token ID (e.g., 1 for edition #1)</span></li>
+                        <li><code className="text-xs">amount:</code> <span className="text-gray-400">How many copies (e.g., 100)</span></li>
+                        <li><code className="text-xs">data:</code> <span className="text-gray-400">0x</span></li>
+                      </ul>
+                      <li>Click "Write" and confirm transaction</li>
+                    </ol>
+                  </div>
+
+                  <div className="bg-black/50 rounded-lg p-4 border border-white/10">
+                    <div className="font-medium mb-3">Step 2: Configure Reward in Step 2</div>
+                    <p className="text-sm text-gray-400 mb-3">
+                      Go to <strong>Step 2 → Add New Reward</strong> and configure:
+                    </p>
+                    <ul className="text-sm text-gray-300 space-y-2 bg-black/30 p-3 rounded">
+                      <li>• <strong>Token Address:</strong> Your ERC-1155 contract address</li>
+                      <li>• <strong>Reward Type:</strong> Select "ERC1155"</li>
+                      <li>• <strong>Amount Per Claim:</strong> 1 (each user gets 1 copy)</li>
+                      <li>• <strong>Token ID:</strong> The edition ID you transferred (e.g., 1)</li>
+                      <li>• <strong>Name & Symbol:</strong> What to call this reward</li>
+                    </ul>
+                    <button
+                      onClick={() => setCurrentStep(2)}
+                      className="mt-3 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm transition-colors"
+                    >
+                      Go to Configure Rewards →
+                    </button>
+                  </div>
+
+                  <div className="bg-purple-500/20 border border-purple-500/50 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl">💡</span>
+                      <div className="text-sm">
+                        <div className="font-bold mb-1">Example Use Case:</div>
+                        <p className="text-gray-300 mb-2">
+                          You have a "Feylon Early Supporter" badge (Edition #1) and want to give one to each of the first 100 claimers:
+                        </p>
+                        <ul className="text-gray-300 space-y-1 list-disc list-inside ml-2">
+                          <li>Transfer 100 copies of Edition #1 to contract</li>
+                          <li>Configure reward: Type=ERC1155, TokenID=1, Amount=1</li>
+                          <li>Result: First 100 people each get 1 badge!</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <span className="text-xl">⚠️</span>
+                      <div className="text-sm">
+                        <div className="font-bold mb-1">Important for ERC-1155:</div>
+                        <ul className="text-gray-300 space-y-1 list-disc list-inside">
+                          <li>Contract balance = max claims (transfer 100 = 100 people can claim)</li>
+                          <li>Everyone gets the same edition (e.g., all get Edition #1)</li>
+                          <li>Make sure token ID in reward config matches what you transferred</li>
+                          <li>NO need to add to NFT queue (unlike ERC721)</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div className="mt-6 p-4 bg-blue-500/20 rounded-xl border border-blue-500/50">
@@ -430,7 +585,7 @@ export default function AdminPage() {
                   <span className="text-xl">💡</span>
                   <div className="text-sm text-gray-300">
                     <div className="font-bold mb-1">Pro Tip:</div>
-                    After funding, click "View Balance →" on your reward in Step 3 to verify tokens arrived!
+                    After funding, click "View Balance →" on your reward in Step 3 to verify tokens/NFTs arrived!
                   </div>
                 </div>
               </div>
@@ -505,6 +660,37 @@ export default function AdminPage() {
                   />
                 </div>
 
+                {newReward.rewardType === 2 && (
+                  <div className="bg-purple-500/20 border border-purple-500/50 rounded-lg p-3">
+                    <div className="text-sm">
+                      <div className="font-bold text-purple-300 mb-1">🎫 ERC-1155 Token ID Required</div>
+                      <p className="text-gray-300">Enter the edition number below (e.g., 1 for Edition #1)</p>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Token ID
+                    <span className="ml-2 text-xs text-gray-500">
+                      (Only used for ERC-1155 editions - which edition ID to distribute)
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    value={newReward.tokenId}
+                    onChange={(e) => setNewReward({...newReward, tokenId: e.target.value})}
+                    placeholder="0"
+                    disabled={newReward.rewardType !== 2}
+                    className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none disabled:opacity-30"
+                  />
+                  {newReward.rewardType !== 2 && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      Not needed for ERC20 or ERC721 rewards
+                    </p>
+                  )}
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Weight (1-100)
@@ -564,6 +750,27 @@ export default function AdminPage() {
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
               <h3 className="text-2xl font-bold mb-4">Distribution Settings</h3>
               <p className="text-gray-400 mb-6">Choose how rewards are given to users:</p>
+
+              {/* TESTING MODE TOGGLE */}
+              <div className="mb-6 p-4 bg-yellow-500/20 border border-yellow-500/50 rounded-xl">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="font-bold text-yellow-300">🧪 Testing Mode</div>
+                    <div className="text-sm text-gray-300">Set cooldown to 0 for unlimited testing claims</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (confirm('Enable testing mode? (Sets cooldown to 0 seconds)')) {
+                        executeContractCall('setCooldownPeriod', [BigInt(0)], 'Testing mode enabled! Cooldown set to 0.');
+                      }
+                    }}
+                    disabled={isUpdating || cooldownPeriod === BigInt(0)}
+                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
+                  >
+                    {cooldownPeriod === BigInt(0) ? '✓ Testing Mode ON' : 'Enable Testing Mode'}
+                  </button>
+                </div>
+              </div>
 
               <div className="space-y-6">
                 {/* Distribution Mode */}
