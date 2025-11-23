@@ -228,7 +228,7 @@ export default function Home() {
         {!isConnected ? (
           <div className="text-center space-y-4">
             <p className="text-gray-400 text-lg">
-              Connect to share your message of goodwill
+              Connect to share your message of goodwill or make your confession
             </p>
             <div className="flex justify-center">
               <ConnectButton />
@@ -240,7 +240,7 @@ export default function Home() {
               <textarea
                 value={message}
                 onChange={handleInputChange}
-                placeholder="Share a message of goodwill or make a confession..."
+                placeholder="Share a message of goodwill or make your confession..."
                 disabled={isSharing}
                 className="w-full h-32 bg-transparent border border-white/20 rounded-lg p-4 text-lg resize-none focus:outline-none focus:border-white/60 transition-colors placeholder:text-gray-600 disabled:opacity-50"
               />
