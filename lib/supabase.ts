@@ -38,6 +38,31 @@ export interface PointTransaction {
   created_at: string;
 }
 
+export interface UserProfile {
+  wallet_address: string;
+  display_name: string;
+  twitter_handle?: string;
+  farcaster_handle?: string;
+  profile_image_url?: string;
+  bio?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserProfileWithStats extends UserProfile {
+  total_points: number;
+  feylons_shared: number;
+  current_streak: number;
+  best_streak: number;
+}
+
+export interface LeaderboardEntry extends UserStats {
+  display_name?: string;
+  twitter_handle?: string;
+  farcaster_handle?: string;
+  profile_image_url?: string;
+}
+
 // Check if Supabase is configured
 export function isConfigured() {
   return !!(supabaseUrl && supabaseAnonKey && supabaseUrl !== 'your-supabase-url' && supabaseAnonKey !== 'your-supabase-anon-key');
@@ -212,8 +237,8 @@ export async function getUserStats(walletAddress: string): Promise<UserStats | n
   }
 }
 
-// Get leaderboard (top users by points)
-export async function getLeaderboard(limit: number = 100): Promise<UserStats[]> {
+// Get leaderboard (top users by points) - ENHANCED WITH PROFILES
+export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEntry[]> {
   if (!isConfigured()) {
     return [];
   }
@@ -221,12 +246,28 @@ export async function getLeaderboard(limit: number = 100): Promise<UserStats[]> 
   try {
     const { data, error } = await supabase
       .from('user_stats')
-      .select('*')
+      .select(`
+        *,
+        user_profiles (
+          display_name,
+          twitter_handle,
+          farcaster_handle,
+          profile_image_url
+        )
+      `)
       .order('total_points', { ascending: false })
       .limit(limit);
 
     if (error) throw error;
-    return data || [];
+
+    // Flatten the joined data
+    return (data || []).map((entry: any) => ({
+      ...entry,
+      display_name: entry.user_profiles?.display_name,
+      twitter_handle: entry.user_profiles?.twitter_handle,
+      farcaster_handle: entry.user_profiles?.farcaster_handle,
+      profile_image_url: entry.user_profiles?.profile_image_url,
+    }));
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
     return [];
@@ -366,5 +407,131 @@ export async function getAnalytics() {
       totalPoints: 0,
       avgPointsPerUser: 0,
     };
+  }
+}
+
+// ============================================
+// USER PROFILE FUNCTIONS
+// ============================================
+
+// Get user profile
+export async function getUserProfile(walletAddress: string): Promise<UserProfile | null> {
+  if (!isConfigured()) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('*')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No profile found
+        return null;
+      }
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error('Error fetching user profile:', error);
+    return null;
+  }
+}
+
+// Create user profile
+export async function createUserProfile(profile: {
+  wallet_address: string;
+  display_name: string;
+  twitter_handle?: string;
+  farcaster_handle?: string;
+  profile_image_url?: string;
+  bio?: string;
+}): Promise<void> {
+  if (!isConfigured()) {
+    throw new Error('Supabase not configured');
+  }
+
+  try {
+    const { error } = await supabase
+      .from('user_profiles')
+      .insert([
+        {
+          wallet_address: profile.wallet_address.toLowerCase(),
+          display_name: profile.display_name,
+          twitter_handle: profile.twitter_handle,
+          farcaster_handle: profile.farcaster_handle,
+          profile_image_url: profile.profile_image_url,
+          bio: profile.bio,
+        },
+      ]);
+
+    if (error) throw error;
+  } catch (error: any) {
+    console.error('Error creating user profile:', error);
+    
+    if (error.code === '23505') {
+      throw new Error('Profile already exists for this wallet');
+    }
+    
+    throw new Error(error.message || 'Failed to create profile');
+  }
+}
+
+// Update user profile
+export async function updateUserProfile(
+  walletAddress: string,
+  updates: {
+    display_name?: string;
+    twitter_handle?: string;
+    farcaster_handle?: string;
+    profile_image_url?: string;
+    bio?: string;
+  }
+): Promise<void> {
+  if (!isConfigured()) {
+    throw new Error('Supabase not configured');
+  }
+
+  try {
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('wallet_address', walletAddress.toLowerCase());
+
+    if (error) throw error;
+  } catch (error: any) {
+    console.error('Error updating user profile:', error);
+    throw new Error(error.message || 'Failed to update profile');
+  }
+}
+
+// Check if user has profile
+export async function hasUserProfile(walletAddress: string): Promise<boolean> {
+  if (!isConfigured()) {
+    return false;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('wallet_address')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      throw error;
+    }
+
+    return !!data;
+  } catch (error) {
+    console.error('Error checking user profile:', error);
+    return false;
   }
 }
