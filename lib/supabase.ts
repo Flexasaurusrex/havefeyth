@@ -14,9 +14,6 @@ export interface Interaction {
   claimed: boolean;
   created_at: string;
   claim_available_at: string;
-  display_name?: string;
-  twitter_handle?: string;
-  farcaster_handle?: string;
 }
 
 const isConfigured = () => {
@@ -33,12 +30,6 @@ export async function canUserInteract(walletAddress: string): Promise<{
     return { canInteract: true };
   }
 
-  // 🚀 TESTING MODE: Let the contract handle ALL cooldown logic
-  // The frontend no longer blocks users - contract whitelist will work!
-  console.log('✅ Frontend cooldown check disabled - letting contract handle it');
-  return { canInteract: true };
-
-  /* ORIGINAL CODE - commented out for testing
   const { data, error } = await supabase
     .from('interactions')
     .select('created_at, claim_available_at')
@@ -63,17 +54,13 @@ export async function canUserInteract(walletAddress: string): Promise<{
     lastInteraction: data.created_at,
     nextAvailable: data.claim_available_at,
   };
-  */
 }
 
 export async function recordInteraction(
   walletAddress: string,
   message: string,
   platform: 'twitter' | 'farcaster',
-  shareLink: string,
-  displayName?: string,
-  twitterHandle?: string,
-  farcasterHandle?: string
+  shareLink: string
 ): Promise<{ success: boolean; error?: string }> {
   if (!isConfigured()) {
     return { success: false, error: 'Database not configured' };
@@ -90,9 +77,6 @@ export async function recordInteraction(
       share_link: shareLink,
       claimed: false,
       claim_available_at: claimAvailableAt.toISOString(),
-      display_name: displayName || null,
-      twitter_handle: twitterHandle || null,
-      farcaster_handle: farcasterHandle || null,
     },
   ]);
 
