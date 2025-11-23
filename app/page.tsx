@@ -288,7 +288,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* SOCIAL FEED - Reddit/Twitter Style Linear Feed */}
+      {/* SOCIAL FEED */}
       <div className="w-full max-w-3xl mx-auto mt-12 md:mt-16 px-4 animate-fade-in">
         <div className="text-center mb-6 md:mb-8">
           <h2 className="text-3xl md:text-4xl font-light mb-2 text-glow">Recent Feylons</h2>
@@ -313,16 +313,13 @@ export default function Home() {
                   style={{ animationDelay: `${index * 0.05}s` }}
                 >
                   <div className="flex gap-3 md:gap-4">
-                    {/* Left: Eye Icon */}
                     <div className="flex-shrink-0">
                       <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center text-lg md:text-xl">
                         👁️
                       </div>
                     </div>
 
-                    {/* Center: Content */}
                     <div className="flex-1 min-w-0">
-                      {/* Header */}
                       <div className="flex items-center gap-2 mb-2 flex-wrap text-xs md:text-sm">
                         <span className="font-semibold text-white truncate">{displayName}</span>
                         
@@ -362,12 +359,10 @@ export default function Home() {
                         </span>
                       </div>
 
-                      {/* Message */}
                       <p className="text-gray-300 text-sm md:text-base leading-relaxed mb-3 break-words">
                         "{feylon.message}"
                       </p>
 
-                      {/* Footer */}
                       <div className="flex items-center gap-2 md:gap-3 text-xs flex-wrap">
                         <span className={`px-2 py-1 rounded text-xs ${
                           feylon.shared_platform === 'twitter' 
@@ -420,7 +415,7 @@ export default function Home() {
         )}
       </div>
 
-      {/* SHARE CONFIRMATION MODAL - CLEAN VERSION (NO WHITELIST MESSAGES) */}
+      {/* SHARE CONFIRMATION MODAL */}
       {showShareConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-gradient-to-br from-purple-900 to-black border border-purple-500/50 rounded-2xl p-8 max-w-md mx-4 space-y-6 animate-scale-in">
@@ -467,17 +462,18 @@ export default function Home() {
         </div>
       )}
 
-      {/* ONBOARDING MODAL - Shows when wallet connects with no profile */}
+      {/* ONBOARDING MODAL */}
       {showOnboarding && address && (
         <OnboardingModal
           walletAddress={address}
           onComplete={() => {
             setShowOnboarding(false);
-            refresh(); // Refresh profile status
+            refresh();
           }}
         />
       )}
 
+      {/* REWARD TOAST */}
       {showToast && claimedRewards.length > 0 && (
         <RewardToast
           rewards={claimedRewards}
