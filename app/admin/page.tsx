@@ -41,13 +41,6 @@ export default function AdminPage() {
     totalClaimed: 0,
   });
   
-  const [activityFilter, setActivityFilter] = useState<'all' | 'claims' | 'shares'>('all');
-  
-  // Whitelist state
-  const [whitelistAddress, setWhitelistAddress] = useState('');
-  const [checkWhitelistAddress, setCheckWhitelistAddress] = useState('');
-  const [whitelistCheckResult, setWhitelistCheckResult] = useState<boolean | null>(null);
-  
   const [newReward, setNewReward] = useState({
     tokenAddress: '',
     rewardType: 0,
@@ -94,7 +87,7 @@ export default function AdminPage() {
     functionName: 'randomSelectionCount',
   });
 
-  const { data: cooldownPeriod, refetch: refetchCooldown } = useReadContract({
+  const { data: cooldownPeriod } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
     functionName: 'cooldownPeriod',
@@ -112,7 +105,7 @@ export default function AdminPage() {
     functionName: 'maxClaimsPerHour',
   });
 
-  const { data: whitelistEnabled, refetch: refetchWhitelistEnabled } = useReadContract({
+  const { data: whitelistEnabled } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
     functionName: 'whitelistEnabled',
@@ -163,71 +156,23 @@ export default function AdminPage() {
   ) => {
     setIsUpdating(true);
     try {
-      console.log('🔍 Calling contract function:', functionName, 'with args:', args);
-      
       await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_MULTI_REWARD_ABI,
         functionName: functionName as any,
         args: args as any,
       });
-      
       alert(successMessage);
       
       // Give blockchain time to update, then refetch
       setTimeout(() => {
         refetchRewards();
-        
-        // Also refetch cooldown if we updated it
-        if (functionName === 'setCooldownPeriod') {
-          console.log('🔄 Refetching cooldown period...');
-          refetchCooldown();
-        }
-        
-        // Refetch whitelist status if we changed it
-        if (functionName === 'setWhitelistEnabled' || functionName === 'addToWhitelist' || functionName === 'removeFromWhitelist') {
-          console.log('🔄 Refetching whitelist status...');
-          refetchWhitelistEnabled();
-        }
       }, 2000);
     } catch (error: any) {
-      console.error(`❌ Error calling ${functionName}:`, error);
-      
-      // Better error messages
-      if (error?.message?.includes('user rejected')) {
-        alert('Transaction cancelled by user');
-      } else if (error?.message?.includes('Ownable')) {
-        alert('Failed: Only the contract owner can do this!');
-      } else {
-        alert(`Failed: ${error?.shortMessage || error?.message || 'Unknown error'}`);
-      }
+      console.error(`Error calling ${functionName}:`, error);
+      alert(`Failed: ${error?.message || 'Unknown error'}`);
     } finally {
       setIsUpdating(false);
-    }
-  };
-
-  const handleCheckWhitelist = async () => {
-    if (!checkWhitelistAddress) {
-      alert('Please enter an address');
-      return;
-    }
-    
-    try {
-      const result = await fetch(`https://base.blockscout.com/api/v2/smart-contracts/${CONTRACT_ADDRESS}/methods-read`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          method_id: 'isWhitelisted',
-          args: [checkWhitelistAddress]
-        })
-      });
-      
-      // For now, just trigger a contract read
-      setWhitelistCheckResult(null);
-      alert('Check the "Read Contract" tab on BaseScan to verify whitelist status for this address.');
-    } catch (error) {
-      console.error('Error checking whitelist:', error);
-      alert('Could not check whitelist status. Try BaseScan directly.');
     }
   };
 
@@ -369,10 +314,8 @@ export default function AdminPage() {
               <div className="text-2xl font-bold text-white">{stats.uniqueUsers}</div>
             </div>
             <div>
-              <div className="text-sm text-gray-400 mb-1">Whitelist</div>
-              <div className={`text-2xl font-bold ${whitelistEnabled ? 'text-green-400' : 'text-gray-400'}`}>
-                {whitelistEnabled ? '✓ Enabled' : '○ Disabled'}
-              </div>
+              <div className="text-sm text-gray-400 mb-1">Total Claims</div>
+              <div className="text-2xl font-bold text-white">{stats.totalClaimed}</div>
             </div>
           </div>
         </div>
@@ -420,11 +363,10 @@ export default function AdminPage() {
         {/* STEP 1: FUND CONTRACT */}
         {currentStep === 1 && (
           <div className="space-y-6 animate-fadeIn">
-            {/* ERC20 Funding */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
               <h2 className="text-3xl font-bold mb-2">💰 Step 1: Fund Your Contract</h2>
               <p className="text-gray-400 mb-6">
-                Transfer tokens to the reward contract so they can be distributed to users.
+                Transfer tokens from your wallet to the reward contract. These tokens will be distributed to users when they claim.
               </p>
 
               <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 p-4 rounded-xl border border-yellow-500/50 mb-6">
@@ -433,57 +375,54 @@ export default function AdminPage() {
                   <div>
                     <div className="font-bold text-yellow-300 mb-1">DO THIS AFTER STEP 2!</div>
                     <p className="text-sm text-gray-300">
-                      Configure your rewards (Step 2) BEFORE funding to prevent accidental over-distribution.
+                      It's recommended to configure your rewards (Step 2) BEFORE funding the contract.
+                      This prevents accidental over-distribution.
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* ERC20 TOKEN FUNDING */}
-              <div className="mb-8">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <span>🪙</span> ERC20 Token Funding (Easy Way)
-                </h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Token Contract Address
-                    </label>
-                    <input
-                      type="text"
-                      value={fundingInput.tokenAddress}
-                      onChange={(e) => setFundingInput({...fundingInput, tokenAddress: e.target.value})}
-                      placeholder="0x... (e.g., your ERC20 token address)"
-                      className="w-full bg-black/50 border border-white/20 rounded-lg p-4 font-mono text-sm focus:border-purple-500 focus:outline-none transition-colors"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Amount to Transfer
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={fundingInput.amount}
-                      onChange={(e) => setFundingInput({...fundingInput, amount: e.target.value})}
-                      placeholder="20000"
-                      className="w-full bg-black/50 border border-white/20 rounded-lg p-4 focus:border-purple-500 focus:outline-none transition-colors"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Enter in regular tokens (we'll automatically convert to wei)
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleFundContract}
-                    disabled={isUpdating || !fundingInput.tokenAddress || !fundingInput.amount}
-                    className="w-full px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-                  >
-                    {isUpdating ? '⏳ Transferring...' : '💸 Transfer ERC20 Tokens to Contract'}
-                  </button>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Token Contract Address
+                  </label>
+                  <input
+                    type="text"
+                    value={fundingInput.tokenAddress}
+                    onChange={(e) => setFundingInput({...fundingInput, tokenAddress: e.target.value})}
+                    placeholder="0x... (e.g., your token address)"
+                    className="w-full bg-black/50 border border-white/20 rounded-lg p-4 font-mono text-sm focus:border-purple-500 focus:outline-none transition-colors"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    The ERC20 token address you want to distribute as rewards
+                  </p>
                 </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Amount to Transfer
+                  </label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    value={fundingInput.amount}
+                    onChange={(e) => setFundingInput({...fundingInput, amount: e.target.value})}
+                    placeholder="20000"
+                    className="w-full bg-black/50 border border-white/20 rounded-lg p-4 focus:border-purple-500 focus:outline-none transition-colors"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Enter in regular tokens (we'll automatically convert to wei)
+                  </p>
+                </div>
+
+                <button
+                  onClick={handleFundContract}
+                  disabled={isUpdating || !fundingInput.tokenAddress || !fundingInput.amount}
+                  className="w-full px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                >
+                  {isUpdating ? '⏳ Transferring...' : '💸 Transfer Tokens to Contract'}
+                </button>
               </div>
 
               <div className="mt-6 p-4 bg-blue-500/20 rounded-xl border border-blue-500/50">
@@ -552,6 +491,9 @@ export default function AdminPage() {
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Amount Per Claim
+                    <span className="ml-2 text-xs text-gray-500">
+                      (How many tokens each user gets when they claim)
+                    </span>
                   </label>
                   <input
                     type="number"
@@ -559,6 +501,23 @@ export default function AdminPage() {
                     value={newReward.amount}
                     onChange={(e) => setNewReward({...newReward, amount: e.target.value})}
                     placeholder="100"
+                    className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Weight (1-100)
+                    <span className="ml-2 text-xs text-gray-500">
+                      (Higher = more likely to be selected in weighted random mode)
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    value={newReward.weight}
+                    onChange={(e) => setNewReward({...newReward, weight: e.target.value})}
+                    min="1"
+                    max="100"
                     className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
                   />
                 </div>
@@ -601,126 +560,6 @@ export default function AdminPage() {
               </button>
             </div>
 
-            {/* Whitelist Management */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-              <h3 className="text-2xl font-bold mb-4">🎯 Whitelist Management</h3>
-              <p className="text-gray-400 mb-6">
-                Whitelist addresses to bypass cooldown restrictions for testing.
-              </p>
-
-              {/* Whitelist Status */}
-              <div className="mb-6 p-4 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-xl border border-purple-500/50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-bold text-lg">Whitelist Status</div>
-                    <div className="text-sm text-gray-300">
-                      {whitelistEnabled ? '✓ Enabled - Whitelisted addresses bypass cooldown' : '○ Disabled - All users have cooldown'}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => executeContractCall('setWhitelistEnabled', [!whitelistEnabled], `Whitelist ${!whitelistEnabled ? 'enabled' : 'disabled'}!`)}
-                    disabled={isUpdating}
-                    className={`px-6 py-3 font-bold rounded-lg transition-colors disabled:opacity-50 ${
-                      whitelistEnabled
-                        ? 'bg-red-600 hover:bg-red-700'
-                        : 'bg-green-600 hover:bg-green-700'
-                    }`}
-                  >
-                    {whitelistEnabled ? 'Disable Whitelist' : 'Enable Whitelist'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Add to Whitelist */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Add Address to Whitelist
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={whitelistAddress}
-                    onChange={(e) => setWhitelistAddress(e.target.value)}
-                    placeholder="0x... (wallet address)"
-                    className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 font-mono text-sm focus:border-purple-500 focus:outline-none"
-                  />
-                  <button
-                    onClick={() => {
-                      if (!whitelistAddress) {
-                        alert('Please enter an address');
-                        return;
-                      }
-                      executeContractCall('addToWhitelist', [whitelistAddress as `0x${string}`], 'Address added to whitelist!');
-                      setWhitelistAddress('');
-                    }}
-                    disabled={isUpdating || !whitelistAddress}
-                    className="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
-                  >
-                    Add
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  This address will bypass cooldown restrictions
-                </p>
-              </div>
-
-              {/* Remove from Whitelist */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Remove Address from Whitelist
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="0x... (wallet address)"
-                    id="removeWhitelistAddress"
-                    className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 font-mono text-sm focus:border-purple-500 focus:outline-none"
-                  />
-                  <button
-                    onClick={() => {
-                      const input = document.getElementById('removeWhitelistAddress') as HTMLInputElement;
-                      if (!input.value) {
-                        alert('Please enter an address');
-                        return;
-                      }
-                      executeContractCall('removeFromWhitelist', [input.value as `0x${string}`], 'Address removed from whitelist!');
-                      input.value = '';
-                    }}
-                    disabled={isUpdating}
-                    className="px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </div>
-
-              {/* Check Whitelist Status */}
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Check if Address is Whitelisted
-                </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={checkWhitelistAddress}
-                    onChange={(e) => setCheckWhitelistAddress(e.target.value)}
-                    placeholder="0x... (wallet address)"
-                    className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 font-mono text-sm focus:border-purple-500 focus:outline-none"
-                  />
-                  <button
-                    onClick={handleCheckWhitelist}
-                    disabled={!checkWhitelistAddress}
-                    className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
-                  >
-                    Check
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  Or check on <a href={`https://basescan.org/address/${CONTRACT_ADDRESS}#readContract`} target="_blank" className="text-blue-400 hover:text-blue-300">BaseScan Read Contract</a>
-                </p>
-              </div>
-            </div>
-
             {/* Distribution Settings */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
               <h3 className="text-2xl font-bold mb-4">Distribution Settings</h3>
@@ -746,7 +585,7 @@ export default function AdminPage() {
                         <div className="flex-1">
                           <div className="font-bold mb-1">All Rewards</div>
                           <div className="text-sm text-gray-400">
-                            Users get ALL active rewards when they claim.
+                            Users get ALL active rewards when they claim. Best for simple setups.
                           </div>
                         </div>
                       </div>
@@ -761,7 +600,7 @@ export default function AdminPage() {
                         <div className="flex-1">
                           <div className="font-bold mb-1">Random Selection</div>
                           <div className="text-sm text-gray-400">
-                            Users get X random rewards.
+                            Users get X random rewards. Set "Random Selection Count" below.
                           </div>
                         </div>
                       </div>
@@ -776,12 +615,46 @@ export default function AdminPage() {
                         <div className="flex-1">
                           <div className="font-bold mb-1">Weighted Random</div>
                           <div className="text-sm text-gray-400">
-                            Higher weight rewards are more likely.
+                            Higher weight rewards are more likely to be selected. Great for rare/common tiers.
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Random Selection Count */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Random Selection Count
+                    <span className="ml-2 text-xs text-gray-500">
+                      (Only used in Random Selection mode) Current: {randomSelectionCount?.toString()}
+                    </span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      id="randomCount"
+                      placeholder="2"
+                      defaultValue={randomSelectionCount?.toString()}
+                      className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById('randomCount') as HTMLInputElement;
+                        if (input.value) {
+                          executeContractCall('setRandomSelectionCount', [BigInt(input.value)], 'Random count updated!');
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    How many rewards to give in Random Selection mode
+                  </p>
                 </div>
 
                 {/* Cooldown Period */}
@@ -814,7 +687,75 @@ export default function AdminPage() {
                     </button>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    Time in seconds between claims. 86400 = 24 hours. Note: Contract may have minimum requirements.
+                    Time in seconds between claims. 86400 = 24 hours, 0 = instant
+                  </p>
+                </div>
+
+                {/* Max Lifetime Claims */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Max Lifetime Claims
+                    <span className="ml-2 text-xs text-gray-500">
+                      Current: {maxLifetimeClaimsPerUser?.toString()}
+                    </span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      id="maxLifetime"
+                      placeholder="1000"
+                      defaultValue={maxLifetimeClaimsPerUser?.toString()}
+                      className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById('maxLifetime') as HTMLInputElement;
+                        if (input.value) {
+                          executeContractCall('setMaxLifetimeClaimsPerUser', [BigInt(input.value)], 'Max lifetime claims updated!');
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Maximum times a user can claim ever (lifetime limit)
+                  </p>
+                </div>
+
+                {/* Max Claims Per Hour */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Max Claims Per Hour (Rate Limit)
+                    <span className="ml-2 text-xs text-gray-500">
+                      Current: {maxClaimsPerHour?.toString()}
+                    </span>
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="number"
+                      id="maxHourly"
+                      placeholder="100"
+                      defaultValue={maxClaimsPerHour?.toString()}
+                      className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        const input = document.getElementById('maxHourly') as HTMLInputElement;
+                        if (input.value) {
+                          executeContractCall('setMaxClaimsPerHour', [BigInt(input.value)], 'Max hourly claims updated!');
+                        }
+                      }}
+                      disabled={isUpdating}
+                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg disabled:opacity-50"
+                    >
+                      Set
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Maximum total claims allowed per hour (prevents spam/abuse)
                   </p>
                 </div>
               </div>
@@ -840,110 +781,16 @@ export default function AdminPage() {
         {/* STEP 3: MONITOR & DISTRIBUTE */}
         {currentStep === 3 && (
           <div className="space-y-6 animate-fadeIn">
-            {/* Claims Analytics */}
             <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-3xl font-bold mb-2">📊 Claims & Activity Log</h2>
-                  <p className="text-gray-400">
-                    View all user activity
-                  </p>
-                </div>
-                <button
-                    onClick={() => window.location.reload()}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
-                  >
-                    🔄 Refresh
-                  </button>
-              </div>
+              <h2 className="text-3xl font-bold mb-2">📊 Step 3: Monitor & Distribute</h2>
+              <p className="text-gray-400 mb-6">
+                View your active rewards and monitor the system.
+              </p>
 
-              {/* Summary Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Total Claims</div>
-                  <div className="text-3xl font-bold text-green-400">
-                    {interactions.filter(i => i.claimed).length}
-                  </div>
-                </div>
-                <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Total Shares</div>
-                  <div className="text-3xl font-bold text-blue-400">
-                    {interactions.length}
-                  </div>
-                </div>
-                <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Unique Users</div>
-                  <div className="text-3xl font-bold text-purple-400">
-                    {stats.uniqueUsers}
-                  </div>
-                </div>
-                <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Claim Rate</div>
-                  <div className="text-3xl font-bold text-orange-400">
-                    {interactions.length > 0 
-                      ? Math.round((interactions.filter(i => i.claimed).length / interactions.length) * 100)
-                      : 0}%
-                  </div>
-                </div>
-              </div>
-
-              {/* Activity Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-gray-400 border-b border-white/10">
-                    <tr>
-                      <th className="pb-3 px-2">Type</th>
-                      <th className="pb-3 px-2">User</th>
-                      <th className="pb-3 px-2">Details</th>
-                      <th className="pb-3 px-2">Timestamp</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {interactions.length === 0 ? (
-                      <tr>
-                        <td colSpan={4} className="py-8 text-center text-gray-500">
-                          <div className="text-4xl mb-2">📭</div>
-                          No activity yet.
-                        </td>
-                      </tr>
-                    ) : (
-                      interactions.slice(0, 20).map((interaction) => (
-                        <tr key={interaction.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                          <td className="py-3 px-2">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              interaction.claimed 
-                                ? 'bg-green-500/20 text-green-400' 
-                                : 'bg-blue-500/20 text-blue-400'
-                            }`}>
-                              {interaction.claimed ? '🎁 Claimed' : '💬 Share'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-2">
-                            <div className="font-mono text-xs">
-                              {interaction.wallet_address.slice(0, 6)}...{interaction.wallet_address.slice(-4)}
-                            </div>
-                          </td>
-                          <td className="py-3 px-2">
-                            <div className="max-w-xs truncate text-gray-300">{interaction.message}</div>
-                          </td>
-                          <td className="py-3 px-2 text-xs text-gray-400">
-                            {new Date(interaction.created_at).toLocaleString()}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Active Rewards Section */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-              <h2 className="text-3xl font-bold mb-2">Active Rewards</h2>
-              
+              {/* Active Rewards */}
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold">Configured Rewards</h3>
+                  <h3 className="text-xl font-bold">Active Rewards</h3>
                   <button
                     onClick={() => {
                       refetchRewards();
@@ -980,13 +827,19 @@ export default function AdminPage() {
                               </div>
                             </div>
                             <div className="text-sm text-gray-300 mb-1">
-                              💰 {formatEther(reward.amount)} per claim
+                              💰 {formatEther(reward.amount)} tokens per claim
+                            </div>
+                            <div className="text-xs text-gray-500 font-mono mb-1">
+                              {reward.tokenAddress.slice(0, 10)}...{reward.tokenAddress.slice(-8)}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              ⚖️ Weight: {reward.weight.toString()}
                             </div>
                           </div>
                           <div className={`px-4 py-2 rounded-lg font-bold ${
                             reward.isActive 
-                              ? 'bg-green-500/20 text-green-400' 
-                              : 'bg-gray-500/20 text-gray-400'
+                              ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                              : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
                           }`}>
                             {reward.isActive ? '✓ Active' : '○ Inactive'}
                           </div>
@@ -996,15 +849,26 @@ export default function AdminPage() {
                           <button
                             onClick={() => executeContractCall('toggleReward', [BigInt(originalIndex), !reward.isActive], `Reward ${!reward.isActive ? 'activated' : 'deactivated'}!`)}
                             disabled={isUpdating}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium disabled:opacity-50"
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
                           >
                             {reward.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm('Remove this reward?')) {
+                                executeContractCall('removeReward', [BigInt(originalIndex)], 'Reward removed!');
+                              }
+                            }}
+                            disabled={isUpdating}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
+                          >
+                            Remove
                           </button>
                           <a
                             href={`https://basescan.org/token/${reward.tokenAddress}?a=${CONTRACT_ADDRESS}`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm font-medium"
+                            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors"
                           >
                             View Balance →
                           </a>
@@ -1014,6 +878,66 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+
+              {/* Recent Activity */}
+              {interactions.length > 0 && (
+                <div>
+                  <h3 className="text-xl font-bold mb-4">Recent Activity</h3>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-gray-400 border-b border-white/10">
+                        <tr>
+                          <th className="pb-3 px-2">User</th>
+                          <th className="pb-3 px-2">Message</th>
+                          <th className="pb-3 px-2">Platform</th>
+                          <th className="pb-3 px-2">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {interactions.slice(0, 10).map((interaction) => (
+                          <tr key={interaction.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td className="py-3 px-2 font-mono text-xs">{interaction.wallet_address.slice(0, 6)}...{interaction.wallet_address.slice(-4)}</td>
+                            <td className="py-3 px-2 max-w-xs truncate">{interaction.message}</td>
+                            <td className="py-3 px-2 capitalize">{interaction.shared_platform}</td>
+                            <td className="py-3 px-2 text-xs text-gray-400">
+                              {new Date(interaction.created_at).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Emergency Controls */}
+            <div className="bg-red-500/10 backdrop-blur-sm rounded-2xl p-8 border border-red-500/30">
+              <h3 className="text-2xl font-bold mb-4 text-red-400">⚠️ Emergency Controls</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button
+                  onClick={() => executeContractCall(isPaused ? 'unpause' : 'pause', [], `Contract ${isPaused ? 'resumed' : 'paused'}!`)}
+                  disabled={isUpdating}
+                  className={`px-6 py-4 font-bold rounded-lg transition-colors ${
+                    isPaused
+                      ? 'bg-green-600 hover:bg-green-700 text-white'
+                      : 'bg-red-600 hover:bg-red-700 text-white'
+                  } disabled:opacity-50`}
+                >
+                  {isPaused ? '▶️ Resume Contract' : '⏸️ Pause Contract'}
+                </button>
+                <button
+                  onClick={() => {
+                    if (confirm('Withdraw all ETH from contract?')) {
+                      executeContractCall('withdrawETH', [], 'ETH withdrawn!');
+                    }
+                  }}
+                  disabled={isUpdating}
+                  className="px-6 py-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg disabled:opacity-50 transition-colors"
+                >
+                  💰 Withdraw ETH
+                </button>
+              </div>
             </div>
 
             <div className="flex justify-start">
@@ -1021,7 +945,7 @@ export default function AdminPage() {
                 onClick={() => setCurrentStep(2)}
                 className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
               >
-                ← Back: Configure
+                ← Back: Configure Rewards
               </button>
             </div>
           </div>
