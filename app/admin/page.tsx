@@ -14,7 +14,12 @@ export default function AdminPage() {
   const [activeTab, setActiveTab] = useState<'fund' | 'rewards' | 'manage' | 'analytics'>('fund');
   
   // Analytics state
-  const [analytics, setAnalytics] = useState({
+  const [analytics, setAnalytics] = useState<{
+    totalInteractions: number;
+    uniqueUsers: number;
+    platformBreakdown: { twitter: number; farcaster: number };
+    recentActivity: any[];
+  }>({
     totalInteractions: 0,
     uniqueUsers: 0,
     platformBreakdown: { twitter: 0, farcaster: 0 },
@@ -41,12 +46,23 @@ export default function AdminPage() {
   });
 
   // Form states
-  const [fundForm, setFundForm] = useState({
+  const [fundForm, setFundForm] = useState<{
+    tokenAddress: string;
+    amount: string;
+  }>({
     tokenAddress: '',
     amount: '',
   });
 
-  const [rewardForm, setRewardForm] = useState({
+  const [rewardForm, setRewardForm] = useState<{
+    tokenAddress: string;
+    rewardType: RewardType;
+    amount: string;
+    tokenId: string;
+    weight: string;
+    name: string;
+    symbol: string;
+  }>({
     tokenAddress: '',
     rewardType: RewardType.ERC20,
     amount: '',
