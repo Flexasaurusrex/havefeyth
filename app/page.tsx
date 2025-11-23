@@ -294,8 +294,8 @@ export default function Home() {
         )}
       </div>
 
-      {/* SOCIAL FEED - Other Users' Feylons */}
-      <div className="w-full max-w-6xl mx-auto mt-16 px-4 animate-fade-in">
+      {/* SOCIAL FEED - Reddit/Twitter Style Linear Feed */}
+      <div className="w-full max-w-3xl mx-auto mt-16 px-4 animate-fade-in">
         <div className="text-center mb-8">
           <h2 className="text-4xl font-light mb-2 text-glow">Recent Feylons</h2>
           <p className="text-gray-500">See what others are sharing 👁️</p>
@@ -307,104 +307,109 @@ export default function Home() {
             <p className="text-gray-500">No Feylons yet. Be the first to share!</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {interactions.slice(0, 12).map((feylon, index) => {
+          <div className="space-y-3">
+            {interactions.slice(0, 20).map((feylon, index) => {
               const displayName = feylon.display_name || 'Anon';
               const hasProfile = feylon.display_name || feylon.twitter_handle || feylon.farcaster_handle;
               
               return (
                 <div
                   key={feylon.id}
-                  className="group relative bg-gradient-to-br from-purple-900/20 to-pink-900/20 backdrop-blur-sm border border-white/10 rounded-2xl p-6 hover:border-purple-500/50 transition-all duration-300 hover:scale-105 animate-fade-in"
-                  style={{ animationDelay: `${index * 0.1}s` }}
+                  className="group bg-gradient-to-r from-purple-900/10 to-pink-900/10 backdrop-blur-sm border border-white/10 rounded-xl p-4 hover:border-purple-500/30 transition-all duration-200 animate-fade-in"
+                  style={{ animationDelay: `${index * 0.05}s` }}
                 >
-                  <div className="absolute top-4 right-4 text-2xl opacity-50 group-hover:opacity-100 transition-opacity">
-                    👁️
-                  </div>
-
-                  <div className="mb-4">
-                    <div className="font-semibold text-white mb-1">
-                      {displayName}
-                    </div>
-                    
-                    {hasProfile && (
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {feylon.twitter_handle && (
-                          <a
-                            href={`https://twitter.com/${feylon.twitter_handle}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                          >
-                            𝕏 @{feylon.twitter_handle}
-                          </a>
-                        )}
-                        {feylon.farcaster_handle && (
-                          <a
-                            href={`https://warpcast.com/${feylon.farcaster_handle}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
-                          >
-                            🟪 @{feylon.farcaster_handle}
-                          </a>
-                        )}
+                  <div className="flex gap-4">
+                    {/* Left: Eye Icon */}
+                    <div className="flex-shrink-0">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center text-xl">
+                        👁️
                       </div>
-                    )}
-                    
-                    <div className="font-mono text-xs text-gray-500 mb-1">
-                      {feylon.wallet_address.slice(0, 6)}...{feylon.wallet_address.slice(-4)}
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span className={`px-2 py-1 rounded ${
-                        feylon.shared_platform === 'twitter' 
-                          ? 'bg-blue-500/20 text-blue-400' 
-                          : 'bg-purple-500/20 text-purple-400'
-                      }`}>
-                        {feylon.shared_platform === 'twitter' ? '𝕏' : '🟪'} {feylon.shared_platform}
-                      </span>
-                      <span>{new Date(feylon.created_at).toLocaleDateString()}</span>
+
+                    {/* Center: Content */}
+                    <div className="flex-1 min-w-0">
+                      {/* Header */}
+                      <div className="flex items-center gap-2 mb-2 flex-wrap">
+                        <span className="font-semibold text-white">{displayName}</span>
+                        
+                        {hasProfile && (
+                          <>
+                            {feylon.twitter_handle && (
+                              <a
+                                href={`https://twitter.com/${feylon.twitter_handle}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                              >
+                                @{feylon.twitter_handle}
+                              </a>
+                            )}
+                            {feylon.farcaster_handle && (
+                              <a
+                                href={`https://warpcast.com/${feylon.farcaster_handle}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                              >
+                                @{feylon.farcaster_handle}
+                              </a>
+                            )}
+                          </>
+                        )}
+                        
+                        <span className="text-xs text-gray-500 font-mono">
+                          {feylon.wallet_address.slice(0, 6)}...{feylon.wallet_address.slice(-4)}
+                        </span>
+                        
+                        <span className="text-xs text-gray-600">•</span>
+                        
+                        <span className="text-xs text-gray-500">
+                          {new Date(feylon.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+
+                      {/* Message */}
+                      <p className="text-gray-300 text-sm leading-relaxed mb-3">
+                        "{feylon.message}"
+                      </p>
+
+                      {/* Footer */}
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className={`px-2 py-1 rounded ${
+                          feylon.shared_platform === 'twitter' 
+                            ? 'bg-blue-500/20 text-blue-400' 
+                            : 'bg-purple-500/20 text-purple-400'
+                        }`}>
+                          {feylon.shared_platform === 'twitter' ? '𝕏' : '🟪'}
+                        </span>
+                        
+                        {feylon.claimed && (
+                          <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded">
+                            ✓ Claimed
+                          </span>
+                        )}
+                        
+                        <button
+                          onClick={() => {
+                            const authorCredit = hasProfile 
+                              ? `by ${displayName}${feylon.twitter_handle ? ` (@${feylon.twitter_handle})` : ''}`
+                              : `by Anon (${feylon.wallet_address.slice(0, 6)}...${feylon.wallet_address.slice(-4)})`;
+                            
+                            const shareText = `Check out this Feylon ${authorCredit}:\n\n"${feylon.message}"\n\nShared via FEYLON 👁️\n${window.location.origin}`;
+                            const encodedText = encodeURIComponent(shareText);
+                            
+                            const shareUrl = feylon.shared_platform === 'twitter'
+                              ? `https://twitter.com/intent/tweet?text=${encodedText}`
+                              : `https://warpcast.com/~/compose?text=${encodedText}`;
+                            
+                            window.open(shareUrl, '_blank', 'width=600,height=400');
+                          }}
+                          className="ml-auto px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors"
+                        >
+                          🔄 Share
+                        </button>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="mb-6 min-h-[100px]">
-                    <p className="text-gray-300 text-sm leading-relaxed line-clamp-5">
-                      "{feylon.message}"
-                    </p>
-                  </div>
-
-                  {feylon.claimed && (
-                    <div className="mb-3">
-                      <span className="text-xs px-2 py-1 bg-green-500/20 text-green-400 rounded-full">
-                        ✓ Claimed Rewards
-                      </span>
-                    </div>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      const authorCredit = hasProfile 
-                        ? `by ${displayName}${feylon.twitter_handle ? ` (@${feylon.twitter_handle})` : ''}`
-                        : `by Anon (${feylon.wallet_address.slice(0, 6)}...${feylon.wallet_address.slice(-4)})`;
-                      
-                      const shareText = `Check out this Feylon ${authorCredit}:\n\n"${feylon.message}"\n\nShared via FEYLON 👁️\n${window.location.origin}`;
-                      const encodedText = encodeURIComponent(shareText);
-                      
-                      const shareUrl = feylon.shared_platform === 'twitter'
-                        ? `https://twitter.com/intent/tweet?text=${encodedText}`
-                        : `https://warpcast.com/~/compose?text=${encodedText}`;
-                      
-                      window.open(shareUrl, '_blank', 'width=600,height=400');
-                    }}
-                    className="w-full px-4 py-2 bg-gradient-to-r from-purple-600/50 to-pink-600/50 hover:from-purple-600 hover:to-pink-600 text-white text-sm font-medium rounded-lg transition-all backdrop-blur-sm border border-white/10 hover:border-white/30"
-                  >
-                    🔄 Share This Feylon
-                  </button>
-
-                  <div className="mt-2 text-center text-xs text-gray-600">
-                    <span className="opacity-0 group-hover:opacity-100 transition-opacity">
-                      ⭐ Earn points (coming soon)
-                    </span>
                   </div>
                 </div>
               );
@@ -412,9 +417,9 @@ export default function Home() {
           </div>
         )}
 
-        {interactions.length > 12 && (
-          <div className="text-center mt-8">
-            <button className="px-6 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
+        {interactions.length > 20 && (
+          <div className="text-center mt-6">
+            <button className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-sm">
               Load More Feylons
             </button>
           </div>
