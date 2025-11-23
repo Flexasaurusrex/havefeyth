@@ -18,6 +18,26 @@ export interface Interaction {
   farcaster_handle?: string;
 }
 
+export interface UserStats {
+  wallet_address: string;
+  total_points: number;
+  feylons_shared: number;
+  feylons_received_shares: number;
+  current_streak: number;
+  best_streak: number;
+  last_share_date: string;
+  created_at: string;
+}
+
+export interface PointTransaction {
+  id: string;
+  wallet_address: string;
+  points_earned: number;
+  reason: string;
+  metadata?: any;
+  created_at: string;
+}
+
 // Check if Supabase is configured
 export function isConfigured() {
   return !!(supabaseUrl && supabaseAnonKey && supabaseUrl !== 'your-supabase-url' && supabaseAnonKey !== 'your-supabase-anon-key');
@@ -34,7 +54,80 @@ export async function canUserInteract(walletAddress: string) {
   return { canInteract: true };
 }
 
-// Record a new interaction
+// Calculate points for a share action
+function calculatePoints(reason: 'own_share' | 'received_share' | 'streak_bonus', streakDays?: number): number {
+  switch (reason) {
+    case 'own_share':
+      return 10;
+    case 'received_share':
+      return 5;
+    case 'streak_bonus':
+      return streakDays === 7 ? 20 : 5; // 20 for 7-day streak, 5 for daily
+    default:
+      return 0;
+  }
+}
+
+// Award points to a user
+export async function awardPoints(
+  walletAddress: string,
+  reason: 'own_share' | 'received_share' | 'streak_bonus',
+  metadata?: any
+) {
+  if (!isConfigured()) {
+    console.log('Supabase not configured, skipping points award');
+    return { points: 0 };
+  }
+
+  try {
+    // Get current streak to calculate bonus
+    const { data: stats } = await supabase
+      .from('user_stats')
+      .select('current_streak, last_share_date')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .single();
+
+    let streakDays = 1;
+    if (stats && reason === 'own_share') {
+      const lastShare = stats.last_share_date ? new Date(stats.last_share_date) : null;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (lastShare) {
+        const lastShareDate = new Date(lastShare);
+        lastShareDate.setHours(0, 0, 0, 0);
+        const daysDiff = Math.floor((today.getTime() - lastShareDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (daysDiff === 1) {
+          // Consecutive day
+          streakDays = (stats.current_streak || 0) + 1;
+        } else if (daysDiff === 0) {
+          // Same day
+          streakDays = stats.current_streak || 1;
+        }
+      }
+    }
+
+    const points = calculatePoints(reason, streakDays);
+
+    // Call the database function to update stats
+    const { error } = await supabase.rpc('update_user_stats', {
+      p_wallet_address: walletAddress.toLowerCase(),
+      p_points: points,
+      p_reason: reason,
+      p_metadata: metadata || {}
+    });
+
+    if (error) throw error;
+
+    return { points, streak: streakDays };
+  } catch (error) {
+    console.error('Error awarding points:', error);
+    return { points: 0 };
+  }
+}
+
+// Record a new interaction (with points)
 export async function recordInteraction(
   walletAddress: string,
   message: string,
@@ -46,10 +139,11 @@ export async function recordInteraction(
 ) {
   if (!isConfigured()) {
     console.log('Supabase not configured, skipping interaction record');
-    return;
+    return { points: 0 };
   }
 
   try {
+    // Record the interaction
     const { error } = await supabase
       .from('interactions')
       .insert([
@@ -66,8 +160,98 @@ export async function recordInteraction(
       ]);
 
     if (error) throw error;
+
+    // Award points for sharing
+    const result = await awardPoints(walletAddress, 'own_share', {
+      platform,
+      message_preview: message.substring(0, 50)
+    });
+
+    return result;
   } catch (error) {
     console.error('Error recording interaction:', error);
+    return { points: 0 };
+  }
+}
+
+// Record when someone shares another user's Feylon
+export async function recordFeytonShare(originalWalletAddress: string, sharerWalletAddress: string, feytonId: string) {
+  if (!isConfigured()) {
+    return;
+  }
+
+  try {
+    // Award points to the original creator
+    await awardPoints(originalWalletAddress, 'received_share', {
+      shared_by: sharerWalletAddress,
+      feylon_id: feytonId
+    });
+  } catch (error) {
+    console.error('Error recording feylon share:', error);
+  }
+}
+
+// Get user stats
+export async function getUserStats(walletAddress: string): Promise<UserStats | null> {
+  if (!isConfigured()) {
+    return null;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_stats')
+      .select('*')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .single();
+
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Error fetching user stats:', error);
+    return null;
+  }
+}
+
+// Get leaderboard (top users by points)
+export async function getLeaderboard(limit: number = 100): Promise<UserStats[]> {
+  if (!isConfigured()) {
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_stats')
+      .select('*')
+      .order('total_points', { ascending: false })
+      .limit(limit);
+
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error('Error fetching leaderboard:', error);
+    return [];
+  }
+}
+
+// Get user's rank
+export async function getUserRank(walletAddress: string): Promise<number> {
+  if (!isConfigured()) {
+    return 0;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('user_stats')
+      .select('wallet_address, total_points')
+      .order('total_points', { ascending: false });
+
+    if (error) throw error;
+    
+    const rank = data?.findIndex(u => u.wallet_address === walletAddress.toLowerCase()) ?? -1;
+    return rank >= 0 ? rank + 1 : 0;
+  } catch (error) {
+    console.error('Error fetching user rank:', error);
+    return 0;
   }
 }
 
@@ -121,6 +305,8 @@ export async function getAnalytics() {
       uniqueUsers: 0,
       platformBreakdown: { twitter: 0, farcaster: 0 },
       recentActivity: [],
+      totalPoints: 0,
+      avgPointsPerUser: 0,
     };
   }
 
@@ -154,11 +340,21 @@ export async function getAnalytics() {
       .order('created_at', { ascending: false })
       .limit(10);
 
+    // Points stats
+    const { data: pointsData } = await supabase
+      .from('user_stats')
+      .select('total_points');
+    
+    const totalPoints = pointsData?.reduce((sum, u) => sum + u.total_points, 0) || 0;
+    const avgPointsPerUser = uniqueUsers > 0 ? Math.round(totalPoints / uniqueUsers) : 0;
+
     return {
       totalInteractions: totalInteractions || 0,
       uniqueUsers,
       platformBreakdown,
       recentActivity: recentActivity || [],
+      totalPoints,
+      avgPointsPerUser,
     };
   } catch (error) {
     console.error('Error fetching analytics:', error);
@@ -167,6 +363,8 @@ export async function getAnalytics() {
       uniqueUsers: 0,
       platformBreakdown: { twitter: 0, farcaster: 0 },
       recentActivity: [],
+      totalPoints: 0,
+      avgPointsPerUser: 0,
     };
   }
 }
