@@ -4,12 +4,12 @@ import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { getLeaderboard, getUserRank } from '@/lib/supabase';
-import type { UserStats } from '@/lib/supabase';
+import type { LeaderboardEntry } from '@/lib/supabase';
 import Link from 'next/link';
 
 export default function LeaderboardPage() {
   const { address, isConnected } = useAccount();
-  const [leaderboard, setLeaderboard] = useState<UserStats[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [userRank, setUserRank] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [timeframe, setTimeframe] = useState<'all' | 'month' | 'week'>('all');
@@ -127,6 +127,10 @@ export default function LeaderboardPage() {
             {leaderboard.map((user, index) => {
               const isCurrentUser = address?.toLowerCase() === user.wallet_address.toLowerCase();
               const isTop3 = index < 3;
+              
+              // Use display name if available, fallback to shortened wallet address
+              const displayName = user.display_name || 
+                `${user.wallet_address.slice(0, 6)}...${user.wallet_address.slice(-4)}`;
 
               return (
                 <div
@@ -151,14 +155,29 @@ export default function LeaderboardPage() {
                       )}
                     </div>
 
+                    {/* Profile Image Placeholder */}
+                    <div className="flex-shrink-0">
+                      {user.profile_image_url ? (
+                        <img 
+                          src={user.profile_image_url} 
+                          alt={displayName}
+                          className="w-12 h-12 rounded-full border-2 border-purple-500/30"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-xl">
+                          👁️
+                        </div>
+                      )}
+                    </div>
+
                     {/* User Info */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-mono text-sm text-gray-300 truncate">
-                          {user.wallet_address.slice(0, 6)}...{user.wallet_address.slice(-4)}
+                        <span className="font-bold text-white truncate">
+                          {displayName}
                         </span>
                         {isCurrentUser && (
-                          <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded">
+                          <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded flex-shrink-0">
                             You
                           </span>
                         )}
@@ -169,6 +188,22 @@ export default function LeaderboardPage() {
                         {user.current_streak > 0 && (
                           <span className="flex items-center gap-1">
                             <span>🔥</span> {user.current_streak} day streak
+                          </span>
+                        )}
+                        {/* Show social handles if available */}
+                        {user.twitter_handle && (
+                          <a 
+                            href={`https://twitter.com/${user.twitter_handle}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-400 hover:text-blue-300 transition-colors"
+                          >
+                            @{user.twitter_handle}
+                          </a>
+                        )}
+                        {user.farcaster_handle && (
+                          <span className="text-purple-400">
+                            @{user.farcaster_handle}
                           </span>
                         )}
                       </div>
