@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { createUserProfile } from '@/lib/supabase';
-import { X } from 'lucide-react';
 
 interface OnboardingModalProps {
   walletAddress: string;
