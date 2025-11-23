@@ -40,18 +40,6 @@ export default function AdminPage() {
     functionName: 'getAllRewards',
   });
 
-  const { data: claimsThisHour } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-    functionName: 'claimsThisHour',
-  });
-
-  const { data: maxClaimsPerHour } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-    functionName: 'maxClaimsPerHour',
-  });
-
   // Form states
   const [fundForm, setFundForm] = useState({
     tokenAddress: '',
@@ -283,9 +271,8 @@ export default function AdminPage() {
             <div className="text-3xl font-bold">{analytics.uniqueUsers}</div>
           </div>
           <div className="bg-gradient-to-br from-green-900/20 to-blue-900/20 border border-white/10 rounded-xl p-6">
-            <div className="text-gray-400 text-sm mb-1">Claims This Hour</div>
-            <div className="text-3xl font-bold">{claimsThisHour?.toString() || '0'}</div>
-            <div className="text-xs text-gray-500 mt-1">/ {maxClaimsPerHour?.toString() || '100'} max</div>
+            <div className="text-gray-400 text-sm mb-1">Active Rewards</div>
+            <div className="text-3xl font-bold">{allRewards?.filter((r: any) => r.isActive).length || 0}</div>
           </div>
           <div className="bg-gradient-to-br from-yellow-900/20 to-orange-900/20 border border-white/10 rounded-xl p-6">
             <div className="text-gray-400 text-sm mb-1">Cooldown Period</div>
