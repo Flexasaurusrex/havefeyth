@@ -4,13 +4,14 @@ import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Image from 'next/image';
-import { recordInteraction, getAllInteractions } from '@/lib/supabase';
-import type { Interaction } from '@/lib/supabase';
+import { recordInteraction, getAllInteractions, getUserProfile, getUserStats } from '@/lib/supabase';
+import type { Interaction, UserProfile, UserStats } from '@/lib/supabase';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI } from '@/lib/contract';
 import { RewardToast, type RewardItem } from '@/components/RewardToast';
 import { formatEther } from 'viem';
 import { OnboardingModal } from '@/components/OnboardingModal';
 import { useProfile } from '@/hooks/useProfile';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,6 +34,9 @@ export default function Home() {
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showWhatIsModal, setShowWhatIsModal] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [userStats, setUserStats] = useState<UserStats | null>(null);
 
   const { data: previewRewards } = useReadContract({
     address: CONTRACT_ADDRESS,
@@ -59,6 +63,24 @@ export default function Home() {
     const interval = setInterval(loadInteractions, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    async function loadUserData() {
+      if (!address || !hasProfile) return;
+      
+      const [profile, stats] = await Promise.all([
+        getUserProfile(address),
+        getUserStats(address)
+      ]);
+      
+      setUserProfile(profile);
+      setUserStats(stats);
+    }
+    
+    if (isConnected && hasProfile) {
+      loadUserData();
+    }
+  }, [address, isConnected, hasProfile]);
 
   useEffect(() => {
     if (isConfirmed && claimedRewards.length > 0) {
@@ -120,6 +142,12 @@ export default function Home() {
       setMessage('');
       setPendingMessage('');
       setIsGlowing(false);
+      
+      // Reload user stats after claiming
+      if (address) {
+        const stats = await getUserStats(address);
+        setUserStats(stats);
+      }
     } catch (error: any) {
       console.error('Error claiming:', error);
       if (error?.message?.includes('user rejected')) {
@@ -144,13 +172,105 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden">
+      {/* USER PROFILE HEADER - Upper Right */}
+      {isConnected && hasProfile && userProfile && (
+        <div className="fixed top-4 right-4 z-40">
+          <div className="relative">
+            <button
+              onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+              className="flex items-center gap-3 bg-gradient-to-r from-purple-900/80 to-pink-900/80 backdrop-blur-md border border-purple-500/50 rounded-full px-4 py-2 hover:border-purple-400/70 transition-all group"
+            >
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-lg animate-glow-pulse">
+                👁️
+              </div>
+              <div className="hidden md:block text-left">
+                <div className="text-sm font-bold text-white">{userProfile.display_name}</div>
+                {userStats && (
+                  <div className="text-xs text-purple-300">{userStats.total_points} points</div>
+                )}
+              </div>
+              <div className="text-white">
+                {showProfileDropdown ? '▲' : '▼'}
+              </div>
+            </button>
+
+            {/* Dropdown Menu */}
+            {showProfileDropdown && (
+              <div className="absolute top-full right-0 mt-2 w-64 bg-gradient-to-br from-purple-900/95 to-black/95 backdrop-blur-md border border-purple-500/50 rounded-xl shadow-2xl overflow-hidden animate-scale-in">
+                {userStats && (
+                  <div className="p-4 border-b border-white/10">
+                    <div className="grid grid-cols-2 gap-3 text-center">
+                      <div>
+                        <div className="text-2xl font-bold text-purple-400">{userStats.total_points}</div>
+                        <div className="text-xs text-gray-400">Points</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-blue-400">{userStats.feylons_shared}</div>
+                        <div className="text-xs text-gray-400">Shared</div>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-center gap-1">
+                          <div className="text-2xl font-bold text-orange-400">{userStats.current_streak}</div>
+                          {userStats.current_streak > 0 && <span className="text-lg">🔥</span>}
+                        </div>
+                        <div className="text-xs text-gray-400">Streak</div>
+                      </div>
+                      <div>
+                        <div className="text-2xl font-bold text-green-400">{userStats.feylons_received_shares}</div>
+                        <div className="text-xs text-gray-400">Received</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="p-2">
+                  <Link href="/profile">
+                    <button
+                      onClick={() => setShowProfileDropdown(false)}
+                      className="w-full text-left px-4 py-3 hover:bg-white/10 rounded-lg transition-colors text-white flex items-center gap-3"
+                    >
+                      <span className="text-lg">⚙️</span>
+                      <span>Edit Profile</span>
+                    </button>
+                  </Link>
+
+                  <Link href="/leaderboard">
+                    <button
+                      onClick={() => setShowProfileDropdown(false)}
+                      className="w-full text-left px-4 py-3 hover:bg-white/10 rounded-lg transition-colors text-white flex items-center gap-3"
+                    >
+                      <span className="text-lg">🏆</span>
+                      <span>Leaderboard</span>
+                    </button>
+                  </Link>
+
+                  <button
+                    onClick={() => {
+                      setShowProfileDropdown(false);
+                      setShowWhatIsModal(true);
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-white/10 rounded-lg transition-colors text-white flex items-center gap-3"
+                  >
+                    <span className="text-lg">❓</span>
+                    <span>What is a Feylon?</span>
+                  </button>
+                </div>
+
+                <div className="p-4 border-t border-white/10">
+                  <ConnectButton />
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="w-full max-w-2xl mx-auto space-y-8 md:space-y-12 animate-fade-in">
         <div className="text-center space-y-6 md:space-y-8">
           <h1 className="text-6xl md:text-8xl font-light tracking-wider text-glow">
             FEYLON
           </h1>
 
-          {/* What is a Feylon? button */}
           <button
             onClick={() => setShowWhatIsModal(true)}
             className="text-sm text-gray-500 hover:text-purple-400 transition-colors underline decoration-dotted underline-offset-4"
@@ -183,10 +303,12 @@ export default function Home() {
               {showSuccess && !showToast && <div className="text-center text-green-500 text-lg animate-fade-in">✓ Shared! Processing rewards...</div>}
             </div>
 
-            <div className="text-center space-y-2">
-              <p className="text-gray-500 text-sm">Connected: {address?.slice(0, 6)}...{address?.slice(-4)}</p>
-              <div className="flex justify-center"><ConnectButton /></div>
-            </div>
+            {!hasProfile && (
+              <div className="text-center space-y-2">
+                <p className="text-gray-500 text-sm">Connected: {address?.slice(0, 6)}...{address?.slice(-4)}</p>
+                <div className="flex justify-center"><ConnectButton /></div>
+              </div>
+            )}
           </>
         )}
 
@@ -263,7 +385,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* SHARE CONFIRMATION MODAL */}
       {showShareConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-gradient-to-br from-purple-900 to-black border border-purple-500/50 rounded-2xl p-8 max-w-md mx-4 space-y-6 animate-scale-in">
@@ -293,7 +414,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* WHAT IS A FEYLON MODAL */}
       {showWhatIsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-gradient-to-br from-purple-900/90 via-black to-pink-900/90 border-2 border-purple-500/50 rounded-2xl max-w-2xl w-full p-8 md:p-12 space-y-6 animate-scale-in relative overflow-y-auto max-h-[90vh]">
@@ -351,12 +471,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* ONBOARDING MODAL */}
       {showOnboarding && address && (
         <OnboardingModal walletAddress={address} onComplete={() => { setShowOnboarding(false); refresh(); }} />
       )}
 
-      {/* REWARD TOAST */}
       {showToast && claimedRewards.length > 0 && (
         <RewardToast rewards={claimedRewards} onClose={() => { setShowToast(false); setClaimedRewards([]); }} />
       )}
