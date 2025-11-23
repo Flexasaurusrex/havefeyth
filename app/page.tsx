@@ -32,6 +32,7 @@ export default function Home() {
   const [pendingMessage, setPendingMessage] = useState('');
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showWhatIsModal, setShowWhatIsModal] = useState(false);
 
   const { data: previewRewards } = useReadContract({
     address: CONTRACT_ADDRESS,
@@ -148,6 +149,14 @@ export default function Home() {
           <h1 className="text-6xl md:text-8xl font-light tracking-wider text-glow">
             FEYLON
           </h1>
+
+          {/* What is a Feylon? button */}
+          <button
+            onClick={() => setShowWhatIsModal(true)}
+            className="text-sm text-gray-500 hover:text-purple-400 transition-colors underline decoration-dotted underline-offset-4"
+          >
+            What is a Feylon? 👁️
+          </button>
           
           <div className={`flex justify-center transition-all duration-500 ${isGlowing ? 'animate-glow-pulse eye-glow-active' : 'eye-glow'}`}>
             <Image src="/feylon-logo.png" alt="Feylon Logo" width={150} height={150} className="select-none md:w-[200px] md:h-[200px]" priority />
@@ -254,6 +263,7 @@ export default function Home() {
         )}
       </div>
 
+      {/* SHARE CONFIRMATION MODAL */}
       {showShareConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-gradient-to-br from-purple-900 to-black border border-purple-500/50 rounded-2xl p-8 max-w-md mx-4 space-y-6 animate-scale-in">
@@ -283,10 +293,70 @@ export default function Home() {
         </div>
       )}
 
+      {/* WHAT IS A FEYLON MODAL */}
+      {showWhatIsModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in p-4">
+          <div className="bg-gradient-to-br from-purple-900/90 via-black to-pink-900/90 border-2 border-purple-500/50 rounded-2xl max-w-2xl w-full p-8 md:p-12 space-y-6 animate-scale-in relative overflow-y-auto max-h-[90vh]">
+            <button onClick={() => setShowWhatIsModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors text-2xl">✕</button>
+
+            <div className="text-center space-y-4">
+              <div className="text-7xl">👁️</div>
+              <h2 className="text-4xl md:text-5xl font-light tracking-wider text-glow">What is a Feylon?</h2>
+            </div>
+
+            <div className="space-y-6 text-gray-300">
+              <div className="bg-black/30 border border-purple-500/30 rounded-lg p-6">
+                <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                  <span className="text-2xl">💭</span> Share Your Truth
+                </h3>
+                <p className="leading-relaxed">
+                  A Feylon is a message of goodwill or confession shared on social media. It could be something uplifting, a deep thought, or something you need to get off your chest.
+                </p>
+              </div>
+
+              <div className="bg-black/30 border border-pink-500/30 rounded-lg p-6">
+                <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                  <span className="text-2xl">🎁</span> Earn Rewards
+                </h3>
+                <p className="leading-relaxed">
+                  Every time you share a Feylon, you earn crypto rewards. Share on Twitter or Farcaster, and claim your tokens instantly.
+                </p>
+              </div>
+
+              <div className="bg-black/30 border border-purple-500/30 rounded-lg p-6">
+                <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                  <span className="text-2xl">🏆</span> Compete & Climb
+                </h3>
+                <p className="leading-relaxed">
+                  Build streaks by sharing daily. Earn bonus points and climb the leaderboard. Show the world your dedication.
+                </p>
+              </div>
+
+              <div className="bg-black/30 border border-pink-500/30 rounded-lg p-6">
+                <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                  <span className="text-2xl">✨</span> Build Your Reputation
+                </h3>
+                <p className="leading-relaxed">
+                  Create your profile, link your socials, and build your Feylon identity. Others can share your messages and amplify your voice.
+                </p>
+              </div>
+            </div>
+
+            <div className="text-center pt-4 border-t border-white/10">
+              <button onClick={() => setShowWhatIsModal(false)} className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all transform hover:scale-105">
+                Got it! Let's Share 🔥
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ONBOARDING MODAL */}
       {showOnboarding && address && (
         <OnboardingModal walletAddress={address} onComplete={() => { setShowOnboarding(false); refresh(); }} />
       )}
 
+      {/* REWARD TOAST */}
       {showToast && claimedRewards.length > 0 && (
         <RewardToast rewards={claimedRewards} onClose={() => { setShowToast(false); setClaimedRewards([]); }} />
       )}
