@@ -217,7 +217,15 @@ export default function Home() {
     setShowShareConfirm(false);
 
     try {
-      await recordInteraction(address, pendingMessage, selectedPlatform, shareUrl);
+      await recordInteraction(
+        address, 
+        pendingMessage, 
+        selectedPlatform, 
+        shareUrl,
+        userProfile?.display_name,
+        userProfile?.twitter_handle,
+        userProfile?.farcaster_handle
+      );
       
       const result = await writeContractAsync({
         address: CONTRACT_ADDRESS,
@@ -243,8 +251,12 @@ export default function Home() {
       setIsGlowing(false);
       
       if (address) {
-        const stats = await getUserStats(address);
+        const [stats, newInteractions] = await Promise.all([
+          getUserStats(address),
+          getAllInteractions()
+        ]);
         setUserStats(stats);
+        setInteractions(newInteractions);
       }
     } catch (error: any) {
       console.error('Error claiming:', error);
