@@ -1,26 +1,29 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { getUserProfile, updateUserProfile } from '@/lib/supabase';
+import { getUserProfile, updateUserProfile, compressAndConvertImage } from '@/lib/supabase';
 import type { UserProfile } from '@/lib/supabase';
 import Link from 'next/link';
 import { UserStatsCard } from '@/components/UserStatsCard';
+import { Avatar } from '@/components/PixelGhost';
 
 export default function ProfilePage() {
   const { address, isConnected } = useAccount();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Form state
   const [displayName, setDisplayName] = useState('');
   const [twitterHandle, setTwitterHandle] = useState('');
   const [farcasterHandle, setFarcasterHandle] = useState('');
   const [bio, setBio] = useState('');
+  const [profileImageUrl, setProfileImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -35,6 +38,7 @@ export default function ProfilePage() {
         setTwitterHandle(userProfile.twitter_handle || '');
         setFarcasterHandle(userProfile.farcaster_handle || '');
         setBio(userProfile.bio || '');
+        setProfileImageUrl(userProfile.profile_image_url || null);
       }
       
       setLoading(false);
@@ -44,6 +48,77 @@ export default function ProfilePage() {
       loadProfile();
     }
   }, [address, isConnected]);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !address) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file (JPEG or PNG)');
+      return;
+    }
+
+    // Validate file size (5MB max before compression)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('Image too large! Please upload an image under 5MB');
+      return;
+    }
+
+    setUploadingImage(true);
+    setError('');
+
+    try {
+      // Compress and convert to Base64
+      const base64Image = await compressAndConvertImage(file);
+      
+      // Check final size
+      const sizeInKB = (base64Image.length * 3) / 4 / 1024;
+      console.log(`Compressed image size: ${sizeInKB.toFixed(2)}KB`);
+
+      if (sizeInKB > 200) {
+        setError('Compressed image still too large. Please use a smaller image.');
+        setUploadingImage(false);
+        return;
+      }
+
+      // Update profile with new image
+      await updateUserProfile(address, {
+        profile_image_url: base64Image,
+      });
+
+      setProfileImageUrl(base64Image);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Error uploading image:', err);
+      setError(err.message || 'Failed to upload image');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    if (!address) return;
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await updateUserProfile(address, {
+        profile_image_url: null as any,
+      });
+
+      setProfileImageUrl(null);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    } catch (err: any) {
+      console.error('Error removing image:', err);
+      setError(err.message || 'Failed to remove image');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -98,7 +173,6 @@ export default function ProfilePage() {
   return (
     <main className="min-h-screen p-4 md:p-8">
       <div className="max-w-4xl mx-auto space-y-8">
-        {/* Header */}
         <div className="text-center space-y-4">
           <Link href="/" className="inline-block text-gray-500 hover:text-white transition-colors text-sm mb-4">
             ← Back to Home
@@ -124,17 +198,60 @@ export default function ProfilePage() {
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-8">
-            {/* Left Column - Stats */}
+            {/* Left Column - Stats & Avatar */}
             <div className="space-y-6">
+              {/* Avatar Section */}
+              <div className="bg-gradient-to-br from-purple-900/20 to-pink-900/20 border border-white/10 rounded-xl p-6">
+                <h3 className="text-lg font-bold text-white mb-4">Profile Picture</h3>
+                
+                <div className="flex flex-col items-center gap-4">
+                  <Avatar 
+                    walletAddress={address!}
+                    customImageUrl={profileImageUrl}
+                    size={120}
+                  />
+                  
+                  <div className="text-center space-y-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/jpg"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                    
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage}
+                      className="px-4 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all text-sm"
+                    >
+                      {uploadingImage ? 'Uploading...' : profileImageUrl ? 'Change Picture' : 'Upload Picture'}
+                    </button>
+                    
+                    {profileImageUrl && (
+                      <button
+                        onClick={handleRemoveImage}
+                        disabled={saving}
+                        className="block w-full px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 font-medium rounded-lg transition-colors text-sm"
+                      >
+                        Remove Picture
+                      </button>
+                    )}
+                    
+                    <p className="text-xs text-gray-500">
+                      Max 200KB • Square format recommended
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <UserStatsCard walletAddress={address!} />
               
-              {/* Wallet Info */}
               <div className="bg-gradient-to-br from-purple-900/20 to-pink-900/20 border border-white/10 rounded-xl p-6">
                 <h3 className="text-lg font-bold text-white mb-3">Wallet</h3>
                 <p className="font-mono text-sm text-gray-400 break-all">{address}</p>
               </div>
 
-              {/* Member Since */}
               <div className="bg-gradient-to-br from-purple-900/20 to-pink-900/20 border border-white/10 rounded-xl p-6">
                 <h3 className="text-lg font-bold text-white mb-3">Member Since</h3>
                 <p className="text-gray-400">
@@ -152,7 +269,6 @@ export default function ProfilePage() {
               <form onSubmit={handleSubmit} className="bg-gradient-to-br from-purple-900/20 to-pink-900/20 border border-white/10 rounded-xl p-6 space-y-4">
                 <h3 className="text-lg font-bold text-white mb-4">Edit Profile</h3>
 
-                {/* Display Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Display Name <span className="text-red-400">*</span>
@@ -168,7 +284,6 @@ export default function ProfilePage() {
                   <p className="text-xs text-gray-500 mt-1">{displayName.length}/50</p>
                 </div>
 
-                {/* Twitter Handle */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Twitter Handle
@@ -184,7 +299,6 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {/* Farcaster Handle */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Farcaster Handle
@@ -200,7 +314,6 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {/* Bio */}
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
                     Bio
@@ -215,21 +328,18 @@ export default function ProfilePage() {
                   <p className="text-xs text-gray-500 mt-1">{bio.length}/280</p>
                 </div>
 
-                {/* Success Message */}
                 {success && (
                   <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-sm text-green-400">
                     ✓ Profile updated successfully!
                   </div>
                 )}
 
-                {/* Error Message */}
                 {error && (
                   <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
                     {error}
                   </div>
                 )}
 
-                {/* Submit Button */}
                 <button
                   type="submit"
                   disabled={saving}
