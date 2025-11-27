@@ -16,6 +16,7 @@ export interface Interaction {
   display_name?: string;
   twitter_handle?: string;
   farcaster_handle?: string;
+  is_confession?: boolean;
 }
 
 export interface UserStats {
@@ -26,6 +27,7 @@ export interface UserStats {
   current_streak: number;
   best_streak: number;
   last_share_date: string;
+  last_confession_date?: string;
   created_at: string;
 }
 
@@ -63,40 +65,36 @@ export interface LeaderboardEntry extends UserStats {
   profile_image_url?: string;
 }
 
-// Check if Supabase is configured
 export function isConfigured() {
   return !!(supabaseUrl && supabaseAnonKey && supabaseUrl !== 'your-supabase-url' && supabaseAnonKey !== 'your-supabase-anon-key');
 }
 
-// Check if user can interact (NO COOLDOWN CHECK - let contract handle it)
 export async function canUserInteract(walletAddress: string) {
   if (!isConfigured()) {
     return { canInteract: true };
   }
-
-  // ✅ Let the contract handle ALL cooldown logic
   console.log('✅ Frontend cooldown check disabled - letting contract handle it');
   return { canInteract: true };
 }
 
-// Calculate points for a share action
-function calculatePoints(reason: 'own_share' | 'received_share' | 'streak_bonus', streakDays?: number): number {
+function calculatePoints(reason: 'own_share' | 'received_share' | 'streak_bonus' | 'confession', streakDays?: number): number {
   switch (reason) {
     case 'own_share':
       return 10;
     case 'received_share':
       return 5;
+    case 'confession':
+      return 5; // Flat 5 points for confessions
     case 'streak_bonus':
-      return streakDays === 7 ? 20 : 5; // 20 for 7-day streak, 5 for daily
+      return streakDays === 7 ? 20 : 5;
     default:
       return 0;
   }
 }
 
-// Award points to a user
 export async function awardPoints(
   walletAddress: string,
-  reason: 'own_share' | 'received_share' | 'streak_bonus',
+  reason: 'own_share' | 'received_share' | 'streak_bonus' | 'confession',
   metadata?: any
 ) {
   if (!isConfigured()) {
@@ -105,7 +103,6 @@ export async function awardPoints(
   }
 
   try {
-    // Get current streak to calculate bonus
     const { data: stats } = await supabase
       .from('user_stats')
       .select('current_streak, last_share_date')
@@ -124,10 +121,8 @@ export async function awardPoints(
         const daysDiff = Math.floor((today.getTime() - lastShareDate.getTime()) / (1000 * 60 * 60 * 24));
         
         if (daysDiff === 1) {
-          // Consecutive day
           streakDays = (stats.current_streak || 0) + 1;
         } else if (daysDiff === 0) {
-          // Same day
           streakDays = stats.current_streak || 1;
         }
       }
@@ -135,7 +130,6 @@ export async function awardPoints(
 
     const points = calculatePoints(reason, streakDays);
 
-    // Call the database function to update stats
     const { error } = await supabase.rpc('update_user_stats', {
       p_wallet_address: walletAddress.toLowerCase(),
       p_points: points,
@@ -144,7 +138,6 @@ export async function awardPoints(
     });
 
     if (error) throw error;
-
     return { points, streak: streakDays };
   } catch (error) {
     console.error('Error awarding points:', error);
@@ -152,7 +145,6 @@ export async function awardPoints(
   }
 }
 
-// Record a new interaction (with points)
 export async function recordInteraction(
   walletAddress: string,
   message: string,
@@ -168,7 +160,6 @@ export async function recordInteraction(
   }
 
   try {
-    // Record the interaction
     const { error } = await supabase
       .from('interactions')
       .insert([
@@ -181,12 +172,12 @@ export async function recordInteraction(
           display_name: displayName,
           twitter_handle: twitterHandle,
           farcaster_handle: farcasterHandle,
+          is_confession: false,
         },
       ]);
 
     if (error) throw error;
 
-    // Award points for sharing
     const result = await awardPoints(walletAddress, 'own_share', {
       platform,
       message_preview: message.substring(0, 50)
@@ -199,14 +190,103 @@ export async function recordInteraction(
   }
 }
 
-// Record when someone shares another user's Feylon
-export async function recordFeytonShare(originalWalletAddress: string, sharerWalletAddress: string, feytonId: string) {
+// NEW: Check if user can confess (3-day cooldown)
+export async function canUserConfess(walletAddress: string): Promise<{ canConfess: boolean; nextAvailable?: Date }> {
   if (!isConfigured()) {
-    return;
+    return { canConfess: true };
   }
 
   try {
-    // Award points to the original creator
+    const { data: stats } = await supabase
+      .from('user_stats')
+      .select('last_confession_date')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .single();
+
+    if (!stats || !stats.last_confession_date) {
+      return { canConfess: true };
+    }
+
+    const lastConfession = new Date(stats.last_confession_date);
+    const now = new Date();
+    const daysSinceLastConfession = Math.floor((now.getTime() - lastConfession.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysSinceLastConfession >= 3) {
+      return { canConfess: true };
+    }
+
+    const nextAvailable = new Date(lastConfession);
+    nextAvailable.setDate(nextAvailable.getDate() + 3);
+    
+    return { canConfess: false, nextAvailable };
+  } catch (error) {
+    console.error('Error checking confession cooldown:', error);
+    return { canConfess: true };
+  }
+}
+
+// NEW: Record confession (feed only, 5 points, 3-day cooldown)
+export async function recordConfession(
+  walletAddress: string,
+  message: string
+) {
+  if (!isConfigured()) {
+    console.log('Supabase not configured, skipping confession record');
+    return { points: 0, success: false };
+  }
+
+  try {
+    // Check cooldown first
+    const { canConfess, nextAvailable } = await canUserConfess(walletAddress);
+    if (!canConfess) {
+      return { 
+        points: 0, 
+        success: false, 
+        error: `Next confession available ${nextAvailable?.toLocaleDateString()}` 
+      };
+    }
+
+    // Record to interactions table
+    const { error: interactionError } = await supabase
+      .from('interactions')
+      .insert([
+        {
+          wallet_address: walletAddress.toLowerCase(),
+          message,
+          shared_platform: 'twitter', // Placeholder, not actually shared
+          share_url: '',
+          claimed: true,
+          is_confession: true,
+        },
+      ]);
+
+    if (interactionError) throw interactionError;
+
+    // Award 5 points
+    const result = await awardPoints(walletAddress, 'confession', {
+      confession: true,
+      message_preview: message.substring(0, 50)
+    });
+
+    // Update last_confession_date
+    const { error: updateError } = await supabase
+      .from('user_stats')
+      .update({ last_confession_date: new Date().toISOString() })
+      .eq('wallet_address', walletAddress.toLowerCase());
+
+    if (updateError) throw updateError;
+
+    return { points: result.points, success: true };
+  } catch (error) {
+    console.error('Error recording confession:', error);
+    return { points: 0, success: false, error: 'Failed to record confession' };
+  }
+}
+
+export async function recordFeytonShare(originalWalletAddress: string, sharerWalletAddress: string, feytonId: string) {
+  if (!isConfigured()) return;
+
+  try {
     await awardPoints(originalWalletAddress, 'received_share', {
       shared_by: sharerWalletAddress,
       feylon_id: feytonId
@@ -216,11 +296,8 @@ export async function recordFeytonShare(originalWalletAddress: string, sharerWal
   }
 }
 
-// Get user stats
 export async function getUserStats(walletAddress: string): Promise<UserStats | null> {
-  if (!isConfigured()) {
-    return null;
-  }
+  if (!isConfigured()) return null;
 
   try {
     const { data, error } = await supabase
@@ -237,11 +314,8 @@ export async function getUserStats(walletAddress: string): Promise<UserStats | n
   }
 }
 
-// Get leaderboard (top users by points) - ENHANCED WITH PROFILES
 export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEntry[]> {
-  if (!isConfigured()) {
-    return [];
-  }
+  if (!isConfigured()) return [];
 
   try {
     const { data, error } = await supabase
@@ -260,7 +334,6 @@ export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEn
 
     if (error) throw error;
 
-    // Flatten the joined data
     return (data || []).map((entry: any) => ({
       ...entry,
       display_name: entry.user_profiles?.display_name,
@@ -274,11 +347,8 @@ export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEn
   }
 }
 
-// Get user's rank
 export async function getUserRank(walletAddress: string): Promise<number> {
-  if (!isConfigured()) {
-    return 0;
-  }
+  if (!isConfigured()) return 0;
 
   try {
     const { data, error } = await supabase
@@ -296,11 +366,8 @@ export async function getUserRank(walletAddress: string): Promise<number> {
   }
 }
 
-// Get all interactions for the social feed
 export async function getAllInteractions(): Promise<Interaction[]> {
-  if (!isConfigured()) {
-    return [];
-  }
+  if (!isConfigured()) return [];
 
   try {
     const { data, error } = await supabase
@@ -318,11 +385,8 @@ export async function getAllInteractions(): Promise<Interaction[]> {
   }
 }
 
-// Get user's interaction count
 export async function getUserInteractionCount(walletAddress: string): Promise<number> {
-  if (!isConfigured()) {
-    return 0;
-  }
+  if (!isConfigured()) return 0;
 
   try {
     const { count, error } = await supabase
@@ -338,7 +402,6 @@ export async function getUserInteractionCount(walletAddress: string): Promise<nu
   }
 }
 
-// Get analytics data
 export async function getAnalytics() {
   if (!isConfigured()) {
     return {
@@ -352,19 +415,16 @@ export async function getAnalytics() {
   }
 
   try {
-    // Total interactions
     const { count: totalInteractions } = await supabase
       .from('interactions')
       .select('*', { count: 'exact', head: true });
 
-    // Unique users
     const { data: users } = await supabase
       .from('interactions')
       .select('wallet_address');
     
     const uniqueUsers = new Set(users?.map(u => u.wallet_address)).size;
 
-    // Platform breakdown
     const { data: platforms } = await supabase
       .from('interactions')
       .select('shared_platform');
@@ -374,14 +434,12 @@ export async function getAnalytics() {
       farcaster: platforms?.filter(p => p.shared_platform === 'farcaster').length || 0,
     };
 
-    // Recent activity (last 10)
     const { data: recentActivity } = await supabase
       .from('interactions')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(10);
 
-    // Points stats
     const { data: pointsData } = await supabase
       .from('user_stats')
       .select('total_points');
@@ -410,15 +468,8 @@ export async function getAnalytics() {
   }
 }
 
-// ============================================
-// USER PROFILE FUNCTIONS
-// ============================================
-
-// Get user profile
 export async function getUserProfile(walletAddress: string): Promise<UserProfile | null> {
-  if (!isConfigured()) {
-    return null;
-  }
+  if (!isConfigured()) return null;
 
   try {
     const { data, error } = await supabase
@@ -428,10 +479,7 @@ export async function getUserProfile(walletAddress: string): Promise<UserProfile
       .single();
 
     if (error) {
-      if (error.code === 'PGRST116') {
-        // No profile found
-        return null;
-      }
+      if (error.code === 'PGRST116') return null;
       throw error;
     }
     
@@ -442,7 +490,6 @@ export async function getUserProfile(walletAddress: string): Promise<UserProfile
   }
 }
 
-// Create user profile
 export async function createUserProfile(profile: {
   wallet_address: string;
   display_name: string;
@@ -481,7 +528,6 @@ export async function createUserProfile(profile: {
   }
 }
 
-// Update user profile
 export async function updateUserProfile(
   walletAddress: string,
   updates: {
@@ -512,11 +558,8 @@ export async function updateUserProfile(
   }
 }
 
-// Check if user has profile
 export async function hasUserProfile(walletAddress: string): Promise<boolean> {
-  if (!isConfigured()) {
-    return false;
-  }
+  if (!isConfigured()) return false;
 
   try {
     const { data, error } = await supabase
@@ -534,4 +577,65 @@ export async function hasUserProfile(walletAddress: string): Promise<boolean> {
     console.error('Error checking user profile:', error);
     return false;
   }
+}
+
+// NEW: Compress and convert image to Base64
+export async function compressAndConvertImage(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 400;
+        
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert to Base64 with compression
+        const base64 = canvas.toDataURL('image/jpeg', 0.85);
+        
+        // Check size (Base64 string length)
+        const sizeInKB = (base64.length * 3) / 4 / 1024;
+        
+        if (sizeInKB > 200) {
+          // Try again with lower quality
+          const lowerQuality = canvas.toDataURL('image/jpeg', 0.6);
+          resolve(lowerQuality);
+        } else {
+          resolve(base64);
+        }
+      };
+      
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = e.target?.result as string;
+    };
+    
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
 }
