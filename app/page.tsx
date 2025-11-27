@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Image from 'next/image';
-import { recordInteraction, getAllInteractions, getUserProfile, getUserStats, canUserConfess, recordConfession } from '@/lib/supabase';
+import { recordInteraction, getAllInteractions, getUserProfile, getUserStats, canUserConfess, recordConfession, deleteInteraction } from '@/lib/supabase';
 import type { Interaction, UserProfile, UserStats } from '@/lib/supabase';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI } from '@/lib/contract';
 import { RewardToast, type RewardItem } from '@/components/RewardToast';
@@ -38,11 +38,14 @@ export default function Home() {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   
   const [confessionMode, setConfessionMode] = useState(false);
   const [canConfess, setCanConfess] = useState(true);
   const [nextConfessionDate, setNextConfessionDate] = useState<Date | null>(null);
   const [confessionCooldown, setConfessionCooldown] = useState('');
+
+  const isAdmin = address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
 
   const { data: previewRewards } = useReadContract({
     address: CONTRACT_ADDRESS,
@@ -280,6 +283,34 @@ export default function Home() {
     setPendingMessage('');
   }
 
+  async function handleDeleteInteraction(interactionId: string) {
+    if (!address || !isAdmin) return;
+
+    if (!confirm('Are you sure you want to delete this Feylon? This cannot be undone.')) {
+      return;
+    }
+
+    setDeletingId(interactionId);
+
+    try {
+      const result = await deleteInteraction(interactionId, address);
+      
+      if (!result.success) {
+        alert(result.error || 'Failed to delete interaction');
+        return;
+      }
+
+      // Reload interactions
+      const newInteractions = await getAllInteractions();
+      setInteractions(newInteractions);
+    } catch (error) {
+      console.error('Error deleting interaction:', error);
+      alert('Failed to delete interaction');
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden">
       {isConnected && hasProfile && userProfile && (
@@ -471,7 +502,7 @@ export default function Home() {
           </>
         )}
 
-        {isConnected && address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase() && (
+        {isConnected && isAdmin && (
           <div className="text-center"><a href="/admin" className="text-gray-500 hover:text-white transition-colors text-sm">Admin Panel →</a></div>
         )}
       </div>
@@ -495,7 +526,23 @@ export default function Home() {
               const isConfession = feylon.is_confession;
               
               return (
-                <div key={feylon.id} className="group bg-gradient-to-r from-purple-900/10 to-pink-900/10 backdrop-blur-sm border border-white/10 rounded-xl p-3 md:p-4 hover:border-purple-500/30 transition-all duration-200 animate-fade-in" style={{ animationDelay: `${index * 0.05}s` }}>
+                <div key={feylon.id} className="group bg-gradient-to-r from-purple-900/10 to-pink-900/10 backdrop-blur-sm border border-white/10 rounded-xl p-3 md:p-4 hover:border-purple-500/30 transition-all duration-200 animate-fade-in relative" style={{ animationDelay: `${index * 0.05}s` }}>
+                  {/* Admin Delete Button */}
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleDeleteInteraction(feylon.id)}
+                      disabled={deletingId === feylon.id}
+                      className="absolute top-2 right-2 p-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Delete this Feylon"
+                    >
+                      {deletingId === feylon.id ? (
+                        <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                      ) : (
+                        <span className="text-sm">🗑️</span>
+                      )}
+                    </button>
+                  )}
+
                   <div className="flex gap-3 md:gap-4">
                     <div className="flex-shrink-0">
                       <Avatar
