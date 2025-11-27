@@ -39,7 +39,6 @@ export default function Home() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [userStats, setUserStats] = useState<UserStats | null>(null);
   
-  // CONFESSION MODE
   const [confessionMode, setConfessionMode] = useState(false);
   const [canConfess, setCanConfess] = useState(true);
   const [nextConfessionDate, setNextConfessionDate] = useState<Date | null>(null);
@@ -89,7 +88,6 @@ export default function Home() {
     }
   }, [address, isConnected, hasProfile]);
 
-  // Check confession cooldown
   useEffect(() => {
     async function checkConfession() {
       if (!address) return;
@@ -107,7 +105,6 @@ export default function Home() {
     }
   }, [address, isConnected, hasProfile]);
 
-  // Update cooldown timer
   useEffect(() => {
     if (!nextConfessionDate || canConfess) {
       setConfessionCooldown('');
@@ -139,7 +136,7 @@ export default function Home() {
     };
     
     updateTimer();
-    const interval = setInterval(updateTimer, 60000); // Update every minute
+    const interval = setInterval(updateTimer, 60000);
     return () => clearInterval(interval);
   }, [nextConfessionDate, canConfess]);
 
@@ -190,7 +187,6 @@ export default function Home() {
       setIsGlowing(false);
       setShowSuccess(true);
       
-      // Reload stats and interactions
       const [stats, newInteractions] = await Promise.all([
         getUserStats(address),
         getAllInteractions()
@@ -199,7 +195,6 @@ export default function Home() {
       setUserStats(stats);
       setInteractions(newInteractions);
       
-      // Recheck confession cooldown
       const confessionCheck = await canUserConfess(address);
       setCanConfess(confessionCheck.canConfess);
       if (!confessionCheck.canConfess && confessionCheck.nextAvailable) {
@@ -247,7 +242,6 @@ export default function Home() {
       setPendingMessage('');
       setIsGlowing(false);
       
-      // Reload user stats
       if (address) {
         const stats = await getUserStats(address);
         setUserStats(stats);
@@ -276,7 +270,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden">
-      {/* USER PROFILE HEADER */}
       {isConnected && hasProfile && userProfile && (
         <div className="fixed top-4 right-4 z-40">
           <div className="relative">
@@ -396,7 +389,6 @@ export default function Home() {
         ) : (
           <>
             <div className="space-y-6">
-              {/* CONFESSION MODE TOGGLE */}
               {hasProfile && (
                 <div className="flex items-center justify-center gap-3 mb-4">
                   <span className={`text-sm ${!confessionMode ? 'text-white font-bold' : 'text-gray-500'}`}>
@@ -428,7 +420,6 @@ export default function Home() {
               
               {message.trim() && (
                 confessionMode ? (
-                  // CONFESSION MODE
                   <div className="space-y-3">
                     <button
                       onClick={handleConfession}
@@ -449,7 +440,6 @@ export default function Home() {
                     </div>
                   </div>
                 ) : (
-                  // SOCIAL SHARE MODE
                   <div className="flex gap-3 md:gap-4 justify-center flex-col sm:flex-row">
                     <button onClick={() => handleShareClick('twitter')} disabled={isSharing || isConfirming} className="px-6 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on 𝕏 (10pts)</button>
                     <button onClick={() => handleShareClick('farcaster')} disabled={isSharing || isConfirming} className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on Farcaster (10pts)</button>
@@ -474,7 +464,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* SOCIAL FEED */}
       <div className="w-full max-w-3xl mx-auto mt-12 md:mt-16 px-4 animate-fade-in">
         <div className="text-center mb-6 md:mb-8">
           <h2 className="text-3xl md:text-4xl font-light mb-2 text-glow">Recent Feylons</h2>
@@ -566,7 +555,6 @@ export default function Home() {
         )}
       </div>
 
-      {/* SHARE CONFIRMATION MODAL */}
       {showShareConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-gradient-to-br from-purple-900 to-black border border-purple-500/50 rounded-2xl p-8 max-w-md mx-4 space-y-6 animate-scale-in">
@@ -596,7 +584,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* WHAT IS FEYLON MODAL */}
       {showWhatIsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-gradient-to-br from-purple-900/90 via-black to-pink-900/90 border-2 border-purple-500/50 rounded-2xl max-w-2xl w-full p-8 md:p-12 space-y-6 animate-scale-in relative overflow-y-auto max-h-[90vh]">
@@ -619,11 +606,29 @@ export default function Home() {
 
               <div className="bg-black/30 border border-pink-500/30 rounded-lg p-6">
                 <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-                  <span className="text-2xl">🎁</span> Earn Rewards
+                  <span className="text-2xl">🎯</span> Two Ways to Share
                 </h3>
-                <p className="leading-relaxed">
-                  Share on Twitter/Farcaster and earn 10 points + streaks. Or use Confession Mode for anonymous feed posts (5 points, 3-day cooldown).
-                </p>
+                <div className="space-y-4">
+                  <div className="bg-black/20 border border-blue-500/20 rounded-lg p-4">
+                    <div className="font-bold text-blue-400 mb-2">🌐 Social Share Mode (10 points)</div>
+                    <ul className="text-sm space-y-1 text-gray-400">
+                      <li>• Share on Twitter or Farcaster</li>
+                      <li>• Build daily streaks for bonus points</li>
+                      <li>• Claim contract rewards instantly</li>
+                      <li>• Appears in feed with your profile</li>
+                    </ul>
+                  </div>
+                  
+                  <div className="bg-black/20 border border-purple-500/20 rounded-lg p-4">
+                    <div className="font-bold text-purple-400 mb-2">🤫 Confession Mode (5 points)</div>
+                    <ul className="text-sm space-y-1 text-gray-400">
+                      <li>• Post anonymously to feed only</li>
+                      <li>• No social media sharing required</li>
+                      <li>• 3-day cooldown between confessions</li>
+                      <li>• Perfect for private thoughts</li>
+                    </ul>
+                  </div>
+                </div>
               </div>
 
               <div className="bg-black/30 border border-purple-500/30 rounded-lg p-6">
@@ -654,12 +659,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* ONBOARDING MODAL */}
       {showOnboarding && address && (
         <OnboardingModal walletAddress={address} onComplete={() => { setShowOnboarding(false); refresh(); }} />
       )}
 
-      {/* REWARD TOAST */}
       {showToast && claimedRewards.length > 0 && (
         <RewardToast rewards={claimedRewards} onClose={() => { setShowToast(false); setClaimedRewards([]); }} />
       )}
