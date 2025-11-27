@@ -84,7 +84,7 @@ function calculatePoints(reason: 'own_share' | 'received_share' | 'streak_bonus'
     case 'received_share':
       return 5;
     case 'confession':
-      return 5; // Flat 5 points for confessions
+      return 5;
     case 'streak_bonus':
       return streakDays === 7 ? 20 : 5;
     default:
@@ -190,7 +190,6 @@ export async function recordInteraction(
   }
 }
 
-// NEW: Check if user can confess (3-day cooldown)
 export async function canUserConfess(walletAddress: string): Promise<{ canConfess: boolean; nextAvailable?: Date }> {
   if (!isConfigured()) {
     return { canConfess: true };
@@ -225,7 +224,6 @@ export async function canUserConfess(walletAddress: string): Promise<{ canConfes
   }
 }
 
-// NEW: Record confession (feed only, 5 points, 3-day cooldown)
 export async function recordConfession(
   walletAddress: string,
   message: string
@@ -236,7 +234,6 @@ export async function recordConfession(
   }
 
   try {
-    // Check cooldown first
     const { canConfess, nextAvailable } = await canUserConfess(walletAddress);
     if (!canConfess) {
       return { 
@@ -246,14 +243,13 @@ export async function recordConfession(
       };
     }
 
-    // Record to interactions table
     const { error: interactionError } = await supabase
       .from('interactions')
       .insert([
         {
           wallet_address: walletAddress.toLowerCase(),
           message,
-          shared_platform: 'twitter', // Placeholder, not actually shared
+          shared_platform: 'twitter',
           share_url: '',
           claimed: true,
           is_confession: true,
@@ -262,13 +258,11 @@ export async function recordConfession(
 
     if (interactionError) throw interactionError;
 
-    // Award 5 points
     const result = await awardPoints(walletAddress, 'confession', {
       confession: true,
       message_preview: message.substring(0, 50)
     });
 
-    // Update last_confession_date
     const { error: updateError } = await supabase
       .from('user_stats')
       .update({ last_confession_date: new Date().toISOString() })
@@ -280,6 +274,32 @@ export async function recordConfession(
   } catch (error) {
     console.error('Error recording confession:', error);
     return { points: 0, success: false, error: 'Failed to record confession' };
+  }
+}
+
+export async function deleteInteraction(interactionId: string, adminAddress: string): Promise<{ success: boolean; error?: string }> {
+  if (!isConfigured()) {
+    return { success: false, error: 'Supabase not configured' };
+  }
+
+  try {
+    // Verify admin
+    const expectedAdmin = process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
+    if (!expectedAdmin || adminAddress.toLowerCase() !== expectedAdmin) {
+      return { success: false, error: 'Unauthorized' };
+    }
+
+    const { error } = await supabase
+      .from('interactions')
+      .delete()
+      .eq('id', interactionId);
+
+    if (error) throw error;
+
+    return { success: true };
+  } catch (error) {
+    console.error('Error deleting interaction:', error);
+    return { success: false, error: 'Failed to delete interaction' };
   }
 }
 
@@ -579,7 +599,6 @@ export async function hasUserProfile(walletAddress: string): Promise<boolean> {
   }
 }
 
-// NEW: Compress and convert image to Base64
 export async function compressAndConvertImage(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -616,14 +635,11 @@ export async function compressAndConvertImage(file: File): Promise<string> {
         
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Convert to Base64 with compression
         const base64 = canvas.toDataURL('image/jpeg', 0.85);
         
-        // Check size (Base64 string length)
         const sizeInKB = (base64.length * 3) / 4 / 1024;
         
         if (sizeInKB > 200) {
-          // Try again with lower quality
           const lowerQuality = canvas.toDataURL('image/jpeg', 0.6);
           resolve(lowerQuality);
         } else {
