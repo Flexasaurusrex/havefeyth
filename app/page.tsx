@@ -34,14 +34,6 @@ export default function SplashPage() {
         console.log('👁️ Splash screen dismissed');
       } catch (error) {
         console.log('👁️ Farcaster SDK not available:', error);
-        try {
-          if (window.parent !== window) {
-            window.parent.postMessage({ type: 'frame_ready' }, '*');
-            console.log('👁️ Sent frame_ready message');
-          }
-        } catch (e) {
-          console.log('👁️ PostMessage fallback failed');
-        }
       }
     };
     initializeFarcasterSDK();
@@ -61,7 +53,7 @@ export default function SplashPage() {
     return () => clearInterval(interval);
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!secret.trim()) return;
     setIsSubmitting(true);
@@ -90,9 +82,9 @@ export default function SplashPage() {
     } finally {
       setIsSubmitting(false);
     }
-  }
+  };
 
-  async function handleShare() {
+  const handleShare = async () => {
     const shareText = `👁️ I whispered a secret to the Eye...\n\n"${transmittedSecret}"\n\nThe Eye sees all. The Eye will open soon.\n\nhttps://feylon.xyz`;
     
     try {
@@ -104,23 +96,21 @@ export default function SplashPage() {
       }
 
       const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`;
-      const newWindow = window.open(warpcastUrl, '_blank', 'width=600,height=700,scrollbars=yes,resizable=yes');
+      const newWindow = window.open(warpcastUrl, '_blank', 'width=600,height=700');
       
-      if (newWindow) {
-        console.log('👁️ Opened Warpcast in new window');
-      } else {
+      if (!newWindow) {
         await navigator.clipboard.writeText(shareText);
-        alert('✅ Copied to clipboard! Paste in Warpcast');
+        alert('✅ Copied to clipboard!');
       }
     } catch (error) {
       try {
         await navigator.clipboard.writeText(shareText);
-        alert('✅ Copied to clipboard! Paste in Warpcast');
-      } catch (clipboardError) {
-        alert('📋 Unable to auto-share. Try copying manually.');
+        alert('✅ Copied to clipboard!');
+      } catch (e) {
+        alert('📋 Unable to share.');
       }
     }
-  }
+  };
 
   const ghostColors = [
     { text: 'text-purple-300/40', name: 'text-purple-400/40', glow: 'rgba(168, 85, 247, 0.6)' },
