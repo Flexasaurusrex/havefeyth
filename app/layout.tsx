@@ -1,34 +1,41 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import Providers from '@/components/Providers';
-
-const inter = Inter({ 
-  subsets: ['latin'],
-  variable: '--font-display',
-  weight: ['300', '400', '500', '600', '700'],
-});
 
 export const metadata: Metadata = {
-  title: 'HAVE FEYTH',
-  description: 'Share messages of goodwill and receive rewards',
-  icons: {
-    icon: '/logo.png',
+  title: 'Feylon | The Eye Sees All',
+  description: 'Whisper a secret truth to the Eye',
+  openGraph: {
+    title: 'Feylon | The Eye Sees All',
+    description: 'Whisper a secret truth to the Eye',
+    images: ['https://feylon.xyz/feylon-frame.png'],
   },
+  other: {
+    'fc:miniapp': JSON.stringify({
+      version: "1",
+      imageUrl: "https://feylon.xyz/feylon-frame.png",
+      button: {
+        title: "👁️ Whisper a Secret",
+        action: {
+          type: "launch_miniapp",
+          name: "Feylon",
+          url: "https://feylon.xyz",
+          splashImageUrl: "https://feylon.xyz/feylon-frame.png",
+          splashBackgroundColor: "#000000"
+        }
+      }
+    })
+  }
 };
 
-export const dynamic = 'force-dynamic';
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={inter.variable}>
-        <Providers>{children}</Providers>
-      </body>
+      <head>
+        <script type="module" dangerouslySetInnerHTML={{ __html: `
+          import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk';
+          window.farcasterSDK = sdk;
+        `}} />
+      </head>
+      <body>{children}</body>
     </html>
   );
 }
