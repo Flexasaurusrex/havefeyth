@@ -19,19 +19,29 @@ export default function SplashPage() {
   const [hasTransmitted, setHasTransmitted] = useState(false);
   const [showEye, setShowEye] = useState(true);
   const [floatingSecrets, setFloatingSecrets] = useState<Transmission[]>([]);
-  const [farcasterSdk, setFarcasterSdk] = useState<any>(null);
+  const [sdk, setSdk] = useState<any>(null);
 
   useEffect(() => {
     const initializeFarcasterSDK = async () => {
       try {
         console.log('👁️ Loading Farcaster SDK...');
-        const { sdk } = await import('https://esm.sh/@farcaster/frame-sdk@latest');
-        setFarcasterSdk(sdk);
+        const importSdk = new Function('return import("https://esm.sh/@farcaster/frame-sdk@latest")');
+        const sdkModule = await importSdk();
+        const sdkInstance = sdkModule.sdk;
+        setSdk(sdkInstance);
         console.log('👁️ Farcaster SDK loaded successfully');
-        await sdk.actions.ready();
-        console.log('👁️ Frame ready');
+        await sdkInstance.actions.ready();
+        console.log('👁️ Splash screen dismissed');
       } catch (error) {
-        console.log('👁️ Not in Frame:', error);
+        console.log('👁️ Farcaster SDK not available:', error);
+        try {
+          if (window.parent !== window) {
+            window.parent.postMessage({ type: 'frame_ready' }, '*');
+            console.log('👁️ Sent frame_ready message');
+          }
+        } catch (e) {
+          console.log('👁️ PostMessage fallback failed');
+        }
       }
     };
     initializeFarcasterSDK();
@@ -51,7 +61,7 @@ export default function SplashPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!secret.trim()) return;
     setIsSubmitting(true);
@@ -80,7 +90,46 @@ export default function SplashPage() {
     } finally {
       setIsSubmitting(false);
     }
-  };
+  }
+
+  async function handleShare() {
+    const shareText = `👁️ I whispered a secret to the Eye...\n\n"${transmittedSecret}"\n\nThe Eye sees all. The Eye will open soon.\n\nhttps://feylon.xyz`;
+    
+    try {
+      if (sdk && sdk.actions && sdk.actions.openUrl) {
+        const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`;
+        await sdk.actions.openUrl(warpcastUrl);
+        console.log('👁️ Opened cast composer via Frame SDK');
+        return;
+      }
+
+      const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`;
+      const newWindow = window.open(warpcastUrl, '_blank', 'width=600,height=700,scrollbars=yes,resizable=yes');
+      
+      if (newWindow) {
+        console.log('👁️ Opened Warpcast in new window');
+      } else {
+        await navigator.clipboard.writeText(shareText);
+        alert('✅ Copied to clipboard! Paste in Warpcast');
+      }
+    } catch (error) {
+      try {
+        await navigator.clipboard.writeText(shareText);
+        alert('✅ Copied to clipboard! Paste in Warpcast');
+      } catch (clipboardError) {
+        alert('📋 Unable to auto-share. Try copying manually.');
+      }
+    }
+  }
+
+  const ghostColors = [
+    { text: 'text-purple-300/40', name: 'text-purple-400/40', glow: 'rgba(168, 85, 247, 0.6)' },
+    { text: 'text-pink-300/40', name: 'text-pink-400/40', glow: 'rgba(236, 72, 153, 0.6)' },
+    { text: 'text-blue-300/40', name: 'text-blue-400/40', glow: 'rgba(96, 165, 250, 0.6)' },
+    { text: 'text-cyan-300/40', name: 'text-cyan-400/40', glow: 'rgba(103, 232, 249, 0.6)' },
+    { text: 'text-violet-300/40', name: 'text-violet-400/40', glow: 'rgba(167, 139, 250, 0.6)' },
+    { text: 'text-fuchsia-300/40', name: 'text-fuchsia-400/40', glow: 'rgba(232, 121, 249, 0.6)' },
+  ];
 
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative overflow-hidden">
@@ -100,15 +149,6 @@ export default function SplashPage() {
           const randomOffsetY = (Math.random() - 0.5) * 10;
           const randomDelay = Math.random() * 10;
           const randomDuration = 15 + Math.random() * 10;
-          
-          const ghostColors = [
-            { text: 'text-purple-300/40', name: 'text-purple-400/40', glow: 'rgba(168, 85, 247, 0.6)' },
-            { text: 'text-pink-300/40', name: 'text-pink-400/40', glow: 'rgba(236, 72, 153, 0.6)' },
-            { text: 'text-blue-300/40', name: 'text-blue-400/40', glow: 'rgba(96, 165, 250, 0.6)' },
-            { text: 'text-cyan-300/40', name: 'text-cyan-400/40', glow: 'rgba(103, 232, 249, 0.6)' },
-            { text: 'text-violet-300/40', name: 'text-violet-400/40', glow: 'rgba(167, 139, 250, 0.6)' },
-            { text: 'text-fuchsia-300/40', name: 'text-fuchsia-400/40', glow: 'rgba(232, 121, 249, 0.6)' },
-          ];
           const colorSet = ghostColors[index % ghostColors.length];
           
           return (
@@ -138,7 +178,6 @@ export default function SplashPage() {
       
       <div className="relative z-10 max-w-2xl w-full space-y-8 text-center animate-fade-in">
         <div className={`relative w-80 h-80 mx-auto mb-8 transition-all duration-1000 ${showEye ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/feylonloop.gif" alt="" width={320} height={320} className="rounded-full w-full h-full object-cover" />
           <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500/30 to-pink-500/30 blur-2xl animate-pulse" />
         </div>
@@ -189,7 +228,7 @@ export default function SplashPage() {
             <button
               type="submit"
               disabled={!secret.trim() || isSubmitting}
-              className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-medium rounded-full transition-all duration-300 hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
+              className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-medium rounded-full transition-all duration-300 hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed w-full"
             >
               {isSubmitting ? 'Transmitting...' : 'Transmit to the Eye'}
             </button>
@@ -217,28 +256,8 @@ export default function SplashPage() {
 
             <div className="pt-6">
               <button
-                onClick={async () => {
-                  const shareText = `👁️ I whispered a secret to the Eye...\n\n"${transmittedSecret}"\n\nThe Eye sees all. The Eye will open soon.\n\nhttps://feylon.xyz`;
-                  try {
-                    if (farcasterSdk?.actions?.openUrl) {
-                      await farcasterSdk.actions.openUrl(`https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`);
-                      return;
-                    }
-                    const newWindow = window.open(`https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`, '_blank', 'width=600,height=700');
-                    if (!newWindow) {
-                      await navigator.clipboard.writeText(shareText);
-                      alert('✅ Copied to clipboard!');
-                    }
-                  } catch (error) {
-                    try {
-                      await navigator.clipboard.writeText(shareText);
-                      alert('✅ Copied to clipboard!');
-                    } catch (e) {
-                      alert('📋 Unable to share.');
-                    }
-                  }
-                }}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium rounded-full transition-all duration-300 hover:scale-105"
+                onClick={handleShare}
+                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium rounded-full transition-all duration-300 hover:scale-105 w-full"
               >
                 🚀 Share Your Transmission
               </button>
