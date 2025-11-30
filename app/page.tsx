@@ -9,6 +9,7 @@ export default function SplashPage() {
   const [isGlowing, setIsGlowing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasTransmitted, setHasTransmitted] = useState(false);
+  const [showEye, setShowEye] = useState(true);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,20 +24,26 @@ export default function SplashPage() {
         .from('transmissions')
         .insert({
           secret: secret.trim(),
-          ip_address: null, // Could use an API to get this if needed
+          ip_address: null,
           user_agent: navigator.userAgent,
         });
       
       if (error) throw error;
       
-      // Success!
+      // Success! Trigger Eye animation
       setHasTransmitted(true);
       setSecret('');
       
-      // Reset after 5 seconds
+      // Eye disappears after 3 seconds (let GIF play)
+      setTimeout(() => {
+        setShowEye(false);
+      }, 3000);
+      
+      // Reset after 8 seconds total
       setTimeout(() => {
         setHasTransmitted(false);
-      }, 5000);
+        setShowEye(true);
+      }, 8000);
       
     } catch (error) {
       console.error('Error transmitting:', error);
@@ -54,17 +61,20 @@ export default function SplashPage() {
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
       
       <div className="relative z-10 max-w-2xl w-full space-y-8 text-center animate-fade-in">
-        {/* The Eye */}
-        <div className="relative w-64 h-64 mx-auto mb-8">
+        {/* The Eye GIF */}
+        <div className={`relative w-80 h-80 mx-auto mb-8 transition-all duration-1000 ${
+          showEye ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
+        }`}>
           <Image
             src="/feyloop.gif"
             alt="The Eye"
-            width={256}
-            height={256}
+            width={320}
+            height={320}
             className="rounded-full"
             unoptimized
+            priority
           />
-          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20 blur-xl animate-pulse" />
+          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500/30 to-pink-500/30 blur-2xl animate-pulse" />
         </div>
 
         {/* Title */}
@@ -77,7 +87,7 @@ export default function SplashPage() {
           </p>
         </div>
 
-        {/* Transmission Form */}
+        {/* Transmission Form or Success Message */}
         {!hasTransmitted ? (
           <form onSubmit={handleSubmit} className="space-y-6 mt-12">
             <div className="relative">
@@ -125,33 +135,49 @@ export default function SplashPage() {
           <div className="space-y-6 mt-12 animate-fade-in">
             <div className="relative">
               <div className="text-5xl mb-4 animate-pulse">👁️</div>
-              <p className="text-2xl font-light text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
+              <p className="text-2xl font-light text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-8">
                 The Eye has received your Transmission
               </p>
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 blur-3xl -z-10 animate-pulse" />
             </div>
+            
+            {/* Coming Soon Message */}
+            <div className="pt-8 space-y-2">
+              <p className="text-3xl font-light text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300 tracking-wider">
+                THE EYE WILL OPEN SOON
+              </p>
+              <div className="flex items-center justify-center gap-2 text-gray-500 text-sm">
+                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-pink-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              </div>
+            </div>
           </div>
         )}
 
-        {/* Farcaster Link */}
-        <div className="pt-12 space-y-4">
-          <p className="text-gray-500 text-sm">Follow the Eye</p>
-          <a
-            href="https://farcaster.xyz/feylon"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-block px-6 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-400 font-medium rounded-full transition-all duration-300 hover:scale-105"
-          >
-            🟪 Feylon on Farcaster
-          </a>
-        </div>
+        {/* Farcaster Link - only show when not in transmission state */}
+        {!hasTransmitted && (
+          <div className="pt-12 space-y-4">
+            <p className="text-gray-500 text-sm">Follow the Eye</p>
+            <a
+              href="https://farcaster.xyz/feylon"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block px-6 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-400 font-medium rounded-full transition-all duration-300 hover:scale-105"
+            >
+              🟪 Feylon on Farcaster
+            </a>
+          </div>
+        )}
 
         {/* Coming Soon */}
-        <div className="pt-8">
-          <p className="text-xs text-gray-600 tracking-widest">
-            SOMETHING IS WATCHING
-          </p>
-        </div>
+        {!hasTransmitted && (
+          <div className="pt-8">
+            <p className="text-xs text-gray-600 tracking-widest">
+              SOMETHING IS WATCHING
+            </p>
+          </div>
+        )}
       </div>
 
       <style jsx global>{`
