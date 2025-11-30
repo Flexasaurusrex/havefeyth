@@ -1,14 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
+
+interface Transmission {
+  id: string;
+  secret: string;
+  display_name?: string;
+  created_at: string;
+}
 
 export default function SplashPage() {
   const [secret, setSecret] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [isGlowing, setIsGlowing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [hasTransmitted, setHasTransmitted] = useState(false);
   const [showEye, setShowEye] = useState(true);
+  const [floatingSecrets, setFloatingSecrets] = useState<Transmission[]>([]);
+
+  // Load recent transmissions for floating ghosts
+  useEffect(() => {
+    async function loadSecrets() {
+      const { data, error } = await supabase
+        .from('transmissions')
+        .select('id, secret, display_name, created_at')
+        .order('created_at', { ascending: false })
+        .limit(15);
+      
+      if (!error && data) {
+        setFloatingSecrets(data);
+      }
+    }
+    
+    loadSecrets();
+    // Refresh every 30 seconds for new secrets
+    const interval = setInterval(loadSecrets, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,11 +48,12 @@ export default function SplashPage() {
     setIsSubmitting(true);
     
     try {
-      // Record the transmission
+      // Record the transmission with optional name
       const { error } = await supabase
         .from('transmissions')
         .insert({
           secret: secret.trim(),
+          display_name: displayName.trim() || null,
           ip_address: null,
           user_agent: navigator.userAgent,
         });
@@ -32,6 +63,7 @@ export default function SplashPage() {
       // Success! Trigger Eye animation
       setHasTransmitted(true);
       setSecret('');
+      setDisplayName('');
       
       // Eye disappears after 3 seconds (let GIF play)
       setTimeout(() => {
@@ -58,6 +90,39 @@ export default function SplashPage() {
       <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black to-pink-900/20" />
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+      
+      {/* FLOATING GHOST SECRETS */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {floatingSecrets.map((transmission, index) => {
+          // Random positioning and animation delays
+          const randomTop = Math.random() * 80;
+          const randomLeft = Math.random() * 90;
+          const randomDelay = Math.random() * 10;
+          const randomDuration = 15 + Math.random() * 10;
+          
+          return (
+            <div
+              key={transmission.id}
+              className="absolute text-purple-300/30 text-sm blur-[1px] hover:blur-none hover:text-purple-300/60 transition-all duration-500 whitespace-nowrap animate-float"
+              style={{
+                top: `${randomTop}%`,
+                left: `${randomLeft}%`,
+                animationDelay: `${randomDelay}s`,
+                animationDuration: `${randomDuration}s`,
+              }}
+            >
+              <div className="flex flex-col items-start">
+                <span className="text-xs text-purple-400/40 mb-1">
+                  {transmission.display_name || 'Anonymous'}
+                </span>
+                <span className="max-w-xs truncate">
+                  "{transmission.secret.slice(0, 60)}{transmission.secret.length > 60 ? '...' : ''}"
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
       
       <div className="relative z-10 max-w-2xl w-full space-y-8 text-center animate-fade-in">
         {/* The Eye GIF */}
@@ -118,6 +183,22 @@ export default function SplashPage() {
               
               <p className="text-xs text-gray-600 mt-2">
                 {secret.length}/280
+              </p>
+            </div>
+
+            {/* Optional Name Field */}
+            <div className="relative">
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Anonymous"
+                maxLength={30}
+                className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-center text-sm text-gray-400 placeholder-gray-600 focus:outline-none focus:border-purple-500/50 transition-all"
+                disabled={isSubmitting}
+              />
+              <p className="text-xs text-gray-600 mt-1">
+                (optional - leave blank to stay anonymous)
               </p>
             </div>
 
@@ -189,6 +270,23 @@ export default function SplashPage() {
           to { opacity: 1; transform: translateY(0); }
         }
         
+        @keyframes float {
+          0%, 100% {
+            transform: translateY(0px) translateX(0px);
+            opacity: 0;
+          }
+          10% {
+            opacity: 0.3;
+          }
+          50% {
+            transform: translateY(-30px) translateX(20px);
+            opacity: 0.5;
+          }
+          90% {
+            opacity: 0.3;
+          }
+        }
+        
         .animate-gradient {
           background-size: 200% 200%;
           animation: gradient 3s ease infinite;
@@ -196,6 +294,10 @@ export default function SplashPage() {
         
         .animate-fade-in {
           animation: fade-in 0.6s ease-out;
+        }
+        
+        .animate-float {
+          animation: float linear infinite;
         }
       `}</style>
     </div>
