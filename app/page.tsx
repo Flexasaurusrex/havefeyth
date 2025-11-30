@@ -103,20 +103,20 @@ export default function SplashPage() {
           return (
             <div
               key={transmission.id}
-              className="absolute text-purple-200/70 text-base hover:text-purple-100 hover:scale-110 transition-all duration-500 whitespace-nowrap animate-float cursor-default pointer-events-auto"
+              className="absolute text-purple-300/50 text-sm blur-[0.5px] hover:blur-none hover:text-purple-300/80 transition-all duration-500 whitespace-nowrap animate-float"
               style={{
                 top: `${randomTop}%`,
                 left: `${randomLeft}%`,
                 animationDelay: `${randomDelay}s`,
                 animationDuration: `${randomDuration}s`,
-                textShadow: '0 0 10px rgba(168, 85, 247, 0.5)',
+                textShadow: '0 0 8px rgba(168, 85, 247, 0.3)',
               }}
             >
-              <div className="flex flex-col items-start bg-black/40 backdrop-blur-sm px-3 py-2 rounded-lg border border-purple-500/20">
-                <span className="text-xs text-purple-300/80 mb-1 font-medium">
+              <div className="flex flex-col items-start">
+                <span className="text-xs text-purple-400/50 mb-1">
                   {transmission.display_name || 'Anonymous'}
                 </span>
-                <span className="max-w-xs truncate text-white/90">
+                <span className="max-w-xs truncate">
                   "{transmission.secret.slice(0, 60)}{transmission.secret.length > 60 ? '...' : ''}"
                 </span>
               </div>
