@@ -100,20 +100,32 @@ export default function SplashPage() {
           const randomDelay = Math.random() * 10;
           const randomDuration = 15 + Math.random() * 10;
           
+          // Random ghostly colors for variety
+          const ghostColors = [
+            { text: 'text-purple-300/50', name: 'text-purple-400/50', glow: 'rgba(168, 85, 247, 0.3)' },
+            { text: 'text-pink-300/50', name: 'text-pink-400/50', glow: 'rgba(236, 72, 153, 0.3)' },
+            { text: 'text-blue-300/50', name: 'text-blue-400/50', glow: 'rgba(96, 165, 250, 0.3)' },
+            { text: 'text-cyan-300/50', name: 'text-cyan-400/50', glow: 'rgba(103, 232, 249, 0.3)' },
+            { text: 'text-violet-300/50', name: 'text-violet-400/50', glow: 'rgba(167, 139, 250, 0.3)' },
+            { text: 'text-fuchsia-300/50', name: 'text-fuchsia-400/50', glow: 'rgba(232, 121, 249, 0.3)' },
+          ];
+          
+          const colorSet = ghostColors[index % ghostColors.length];
+          
           return (
             <div
               key={transmission.id}
-              className="absolute text-purple-300/50 text-sm blur-[0.5px] hover:blur-none hover:text-purple-300/80 transition-all duration-500 whitespace-nowrap animate-float"
+              className={`absolute ${colorSet.text} text-sm blur-[0.5px] hover:blur-none hover:opacity-80 transition-all duration-500 whitespace-nowrap animate-float`}
               style={{
                 top: `${randomTop}%`,
                 left: `${randomLeft}%`,
                 animationDelay: `${randomDelay}s`,
                 animationDuration: `${randomDuration}s`,
-                textShadow: '0 0 8px rgba(168, 85, 247, 0.3)',
+                textShadow: `0 0 8px ${colorSet.glow}`,
               }}
             >
               <div className="flex flex-col items-start">
-                <span className="text-xs text-purple-400/50 mb-1">
+                <span className={`text-xs ${colorSet.name} mb-1`}>
                   {transmission.display_name || 'Anonymous'}
                 </span>
                 <span className="max-w-xs truncate">
