@@ -19,6 +19,13 @@ export default function SplashPage() {
   const [showEye, setShowEye] = useState(true);
   const [floatingSecrets, setFloatingSecrets] = useState<Transmission[]>([]);
 
+  // Call Farcaster SDK ready when mounted
+  useEffect(() => {
+    if (typeof window !== 'undefined' && (window as any).farcasterSDK) {
+      (window as any).farcasterSDK.actions.ready().catch(console.error);
+    }
+  }, []);
+
   // Load recent transmissions for floating ghosts
   useEffect(() => {
     async function loadSecrets() {
@@ -260,7 +267,7 @@ export default function SplashPage() {
         {!hasTransmitted && (
           <div className="pt-12 space-y-4">
             <p className="text-gray-500 text-sm">Follow the Eye</p>
-            <a
+            
               href="https://farcaster.xyz/feylon"
               target="_blank"
               rel="noopener noreferrer"
