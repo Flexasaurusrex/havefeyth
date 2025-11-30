@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import Image from 'next/image';
 import { supabase } from '@/lib/supabase';
 
 export default function SplashPage() {
@@ -65,14 +64,13 @@ export default function SplashPage() {
         <div className={`relative w-80 h-80 mx-auto mb-8 transition-all duration-1000 ${
           showEye ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
         }`}>
-          <Image
-            src="/feyloop.gif"
-            alt="The Eye"
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/feylonloop.gif"
+            alt=""
             width={320}
             height={320}
-            className="rounded-full"
-            unoptimized
-            priority
+            className="rounded-full w-full h-full object-cover"
           />
           <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500/30 to-pink-500/30 blur-2xl animate-pulse" />
         </div>
