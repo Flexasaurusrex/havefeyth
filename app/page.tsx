@@ -29,9 +29,16 @@ export default function SplashPage() {
   const [floatingSecrets, setFloatingSecrets] = useState<Transmission[]>([]);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).farcasterSDK) {
-      (window as any).farcasterSDK.actions.ready().catch(console.error);
-    }
+    // Wait for SDK to be available
+    const checkSDK = () => {
+      if (typeof window !== 'undefined' && (window as any).farcasterSDK) {
+        (window as any).farcasterSDK.actions.ready().catch(console.error);
+      } else {
+        setTimeout(checkSDK, 100);
+      }
+    };
+    
+    checkSDK();
   }, []);
 
   useEffect(() => {
