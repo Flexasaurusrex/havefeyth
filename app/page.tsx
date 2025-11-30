@@ -10,6 +10,15 @@ interface Transmission {
   created_at: string;
 }
 
+const ghostColors = [
+  { text: 'text-purple-300/40', name: 'text-purple-400/40', glow: 'rgba(168, 85, 247, 0.6)' },
+  { text: 'text-pink-300/40', name: 'text-pink-400/40', glow: 'rgba(236, 72, 153, 0.6)' },
+  { text: 'text-blue-300/40', name: 'text-blue-400/40', glow: 'rgba(96, 165, 250, 0.6)' },
+  { text: 'text-cyan-300/40', name: 'text-cyan-400/40', glow: 'rgba(103, 232, 249, 0.6)' },
+  { text: 'text-violet-300/40', name: 'text-violet-400/40', glow: 'rgba(167, 139, 250, 0.6)' },
+  { text: 'text-fuchsia-300/40', name: 'text-fuchsia-400/40', glow: 'rgba(232, 121, 249, 0.6)' },
+];
+
 export default function SplashPage() {
   const [secret, setSecret] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -19,14 +28,12 @@ export default function SplashPage() {
   const [showEye, setShowEye] = useState(true);
   const [floatingSecrets, setFloatingSecrets] = useState<Transmission[]>([]);
 
-  // Call Farcaster SDK ready when mounted
   useEffect(() => {
     if (typeof window !== 'undefined' && (window as any).farcasterSDK) {
       (window as any).farcasterSDK.actions.ready().catch(console.error);
     }
   }, []);
 
-  // Load recent transmissions for floating ghosts
   useEffect(() => {
     async function loadSecrets() {
       const { data, error } = await supabase
@@ -41,7 +48,6 @@ export default function SplashPage() {
     }
     
     loadSecrets();
-    // Refresh every 30 seconds for new secrets
     const interval = setInterval(loadSecrets, 30000);
     
     return () => clearInterval(interval);
@@ -55,7 +61,6 @@ export default function SplashPage() {
     setIsSubmitting(true);
     
     try {
-      // Record the transmission with optional name
       const { error } = await supabase
         .from('transmissions')
         .insert({
@@ -67,17 +72,14 @@ export default function SplashPage() {
       
       if (error) throw error;
       
-      // Success! Trigger Eye animation
       setHasTransmitted(true);
       setSecret('');
       setDisplayName('');
       
-      // Eye disappears after 3 seconds (let GIF play)
       setTimeout(() => {
         setShowEye(false);
       }, 3000);
       
-      // Reset after 8 seconds total
       setTimeout(() => {
         setHasTransmitted(false);
         setShowEye(true);
@@ -93,21 +95,17 @@ export default function SplashPage() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      {/* Gradient background effects */}
       <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black to-pink-900/20" />
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
       
-      {/* FLOATING GHOST SECRETS */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {floatingSecrets.map((transmission, index) => {
-          // Better spacing algorithm to prevent overlap
           const gridColumns = 3;
           const gridRows = 5;
           const col = index % gridColumns;
           const row = Math.floor(index / gridColumns);
           
-          // Position in grid with randomness
           const baseLeft = (col / gridColumns) * 100;
           const baseTop = (row / gridRows) * 100;
           const randomOffsetX = (Math.random() - 0.5) * 15;
@@ -115,16 +113,6 @@ export default function SplashPage() {
           
           const randomDelay = Math.random() * 10;
           const randomDuration = 15 + Math.random() * 10;
-          
-          // Random ghostly colors for variety
-          const ghostColors = [
-            { text: 'text-purple-300/40', name: 'text-purple-400/40', glow: 'rgba(168, 85, 247, 0.6)' },
-            { text: 'text-pink-300/40', name: 'text-pink-400/40', glow: 'rgba(236, 72, 153, 0.6)' },
-            { text: 'text-blue-300/40', name: 'text-blue-400/40', glow: 'rgba(96, 165, 250, 0.6)' },
-            { text: 'text-cyan-300/40', name: 'text-cyan-400/40', glow: 'rgba(103, 232, 249, 0.6)' },
-            { text: 'text-violet-300/40', name: 'text-violet-400/40', glow: 'rgba(167, 139, 250, 0.6)' },
-            { text: 'text-fuchsia-300/40', name: 'text-fuchsia-400/40', glow: 'rgba(232, 121, 249, 0.6)' },
-          ];
           
           const colorSet = ghostColors[index % ghostColors.length];
           
@@ -145,7 +133,7 @@ export default function SplashPage() {
                   {transmission.display_name || 'Anonymous'}
                 </span>
                 <span className="max-w-xs truncate">
-                  "{transmission.secret.slice(0, 60)}{transmission.secret.length > 60 ? '...' : ''}"
+                  &quot;{transmission.secret.slice(0, 60)}{transmission.secret.length > 60 ? '...' : ''}&quot;
                 </span>
               </div>
             </div>
@@ -154,11 +142,9 @@ export default function SplashPage() {
       </div>
       
       <div className="relative z-10 max-w-2xl w-full space-y-8 text-center animate-fade-in">
-        {/* The Eye GIF */}
         <div className={`relative w-80 h-80 mx-auto mb-8 transition-all duration-1000 ${
           showEye ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
         }`}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/feylonloop.gif"
             alt=""
@@ -169,7 +155,6 @@ export default function SplashPage() {
           <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500/30 to-pink-500/30 blur-2xl animate-pulse" />
         </div>
 
-        {/* Title */}
         <div className="space-y-2">
           <h1 className="text-6xl font-light tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 animate-gradient">
             FEYLON
@@ -179,7 +164,6 @@ export default function SplashPage() {
           </p>
         </div>
 
-        {/* Transmission Form or Success Message */}
         {!hasTransmitted ? (
           <form onSubmit={handleSubmit} className="space-y-6 mt-12">
             <div className="relative">
@@ -204,7 +188,6 @@ export default function SplashPage() {
                   disabled={isSubmitting}
                 />
                 
-                {/* Glow effect */}
                 {isGlowing && (
                   <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 blur-xl -z-10 animate-pulse" />
                 )}
@@ -215,7 +198,6 @@ export default function SplashPage() {
               </p>
             </div>
 
-            {/* Optional Name Field */}
             <div className="relative">
               <input
                 type="text"
@@ -249,7 +231,6 @@ export default function SplashPage() {
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 blur-3xl -z-10 animate-pulse" />
             </div>
             
-            {/* Coming Soon Message */}
             <div className="pt-8 space-y-2">
               <p className="text-3xl font-light text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300 tracking-wider">
                 THE EYE WILL OPEN SOON
@@ -263,11 +244,10 @@ export default function SplashPage() {
           </div>
         )}
 
-        {/* Farcaster Link - only show when not in transmission state */}
         {!hasTransmitted && (
           <div className="pt-12 space-y-4">
             <p className="text-gray-500 text-sm">Follow the Eye</p>
-            
+            <a
               href="https://farcaster.xyz/feylon"
               target="_blank"
               rel="noopener noreferrer"
@@ -278,7 +258,6 @@ export default function SplashPage() {
           </div>
         )}
 
-        {/* Coming Soon */}
         {!hasTransmitted && (
           <div className="pt-8">
             <p className="text-xs text-gray-600 tracking-widest">
