@@ -855,7 +855,7 @@ export default function AdminPage() {
                             address: CONTRACT_ADDRESS,
                             abi: HAVE_FEYTH_MULTI_REWARD_ABI,
                             functionName: 'setCooldownPeriod',
-                            args: [0n], // Use 0n instead of BigInt(0)
+                            args: [BigInt(0)],
                           });
                           
                           console.log('✅ Transaction sent:', tx);
@@ -868,10 +868,10 @@ export default function AdminPage() {
                         setIsUpdating(false);
                       }
                     }}
-                    disabled={isUpdating || cooldownPeriod === 0n}
+                    disabled={isUpdating || cooldownPeriod === BigInt(0)}
                     className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
                   >
-                    {cooldownPeriod === 0n ? '✓ Testing Mode ON' : isUpdating ? 'Updating...' : 'Enable Testing Mode'}
+                    {cooldownPeriod === BigInt(0) ? '✓ Testing Mode ON' : isUpdating ? 'Updating...' : 'Enable Testing Mode'}
                   </button>
                 </div>
                 
