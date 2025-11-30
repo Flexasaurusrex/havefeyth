@@ -1,36 +1,34 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import Providers from '@/components/Providers';
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ 
+  subsets: ['latin'],
+  variable: '--font-display',
+  weight: ['300', '400', '500', '600', '700'],
+});
 
 export const metadata: Metadata = {
-  title: 'Feylon | The Eye Sees All',
-  description: 'Whisper a secret truth to the Eye',
-  openGraph: {
-    title: 'Feylon | The Eye Sees All',
-    description: 'Whisper a secret truth to the Eye',
-    images: ['https://feylon.xyz/feylon-frame.png'],
+  title: 'HAVE FEYTH',
+  description: 'Share messages of goodwill and receive rewards',
+  icons: {
+    icon: '/logo.png',
   },
-  other: {
-    'fc:frame': 'vNext',
-    'fc:frame:image': 'https://feylon.xyz/feylon-frame.png',
-    'fc:frame:button:1': '👁️ Whisper a Secret',
-    'fc:frame:button:1:action': 'link',
-    'fc:frame:button:1:target': 'https://feylon.xyz',
-  },
-}
+};
+
+export const dynamic = 'force-dynamic';
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
-        {children}
+      <body className={inter.variable}>
+        <Providers>{children}</Providers>
       </body>
     </html>
-  )
+  );
 }
