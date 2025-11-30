@@ -94,20 +94,29 @@ export default function SplashPage() {
       {/* FLOATING GHOST SECRETS */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {floatingSecrets.map((transmission, index) => {
-          // Random positioning and animation delays
-          const randomTop = Math.random() * 80;
-          const randomLeft = Math.random() * 90;
+          // Better spacing algorithm to prevent overlap
+          const gridColumns = 3;
+          const gridRows = 5;
+          const col = index % gridColumns;
+          const row = Math.floor(index / gridColumns);
+          
+          // Position in grid with randomness
+          const baseLeft = (col / gridColumns) * 100;
+          const baseTop = (row / gridRows) * 100;
+          const randomOffsetX = (Math.random() - 0.5) * 15;
+          const randomOffsetY = (Math.random() - 0.5) * 10;
+          
           const randomDelay = Math.random() * 10;
           const randomDuration = 15 + Math.random() * 10;
           
           // Random ghostly colors for variety
           const ghostColors = [
-            { text: 'text-purple-300/50', name: 'text-purple-400/50', glow: 'rgba(168, 85, 247, 0.3)' },
-            { text: 'text-pink-300/50', name: 'text-pink-400/50', glow: 'rgba(236, 72, 153, 0.3)' },
-            { text: 'text-blue-300/50', name: 'text-blue-400/50', glow: 'rgba(96, 165, 250, 0.3)' },
-            { text: 'text-cyan-300/50', name: 'text-cyan-400/50', glow: 'rgba(103, 232, 249, 0.3)' },
-            { text: 'text-violet-300/50', name: 'text-violet-400/50', glow: 'rgba(167, 139, 250, 0.3)' },
-            { text: 'text-fuchsia-300/50', name: 'text-fuchsia-400/50', glow: 'rgba(232, 121, 249, 0.3)' },
+            { text: 'text-purple-300/40', name: 'text-purple-400/40', glow: 'rgba(168, 85, 247, 0.6)' },
+            { text: 'text-pink-300/40', name: 'text-pink-400/40', glow: 'rgba(236, 72, 153, 0.6)' },
+            { text: 'text-blue-300/40', name: 'text-blue-400/40', glow: 'rgba(96, 165, 250, 0.6)' },
+            { text: 'text-cyan-300/40', name: 'text-cyan-400/40', glow: 'rgba(103, 232, 249, 0.6)' },
+            { text: 'text-violet-300/40', name: 'text-violet-400/40', glow: 'rgba(167, 139, 250, 0.6)' },
+            { text: 'text-fuchsia-300/40', name: 'text-fuchsia-400/40', glow: 'rgba(232, 121, 249, 0.6)' },
           ];
           
           const colorSet = ghostColors[index % ghostColors.length];
@@ -115,13 +124,13 @@ export default function SplashPage() {
           return (
             <div
               key={transmission.id}
-              className={`absolute ${colorSet.text} text-sm blur-[0.5px] hover:blur-none hover:opacity-80 transition-all duration-500 whitespace-nowrap animate-float`}
+              className={`absolute ${colorSet.text} text-sm blur-[0.8px] hover:blur-[0.3px] hover:opacity-70 transition-all duration-700 whitespace-nowrap animate-float`}
               style={{
-                top: `${randomTop}%`,
-                left: `${randomLeft}%`,
+                top: `${baseTop + randomOffsetY}%`,
+                left: `${baseLeft + randomOffsetX}%`,
                 animationDelay: `${randomDelay}s`,
                 animationDuration: `${randomDuration}s`,
-                textShadow: `0 0 8px ${colorSet.glow}`,
+                textShadow: `0 0 12px ${colorSet.glow}, 0 0 20px ${colorSet.glow}`,
               }}
             >
               <div className="flex flex-col items-start">
