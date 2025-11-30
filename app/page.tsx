@@ -238,6 +238,30 @@ export default function SplashPage() {
               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 blur-3xl -z-10 animate-pulse" />
             </div>
             
+            <div className="space-y-4 pt-4">
+              <p className="text-gray-400 text-sm">Help the Eye find more Watchers</p>
+              <button
+                onClick={async () => {
+                  if (typeof window !== 'undefined' && (window as any).farcasterSDK) {
+                    try {
+                      await (window as any).farcasterSDK.actions.composeCast({
+                        text: "I just whispered a secret to the Eye 👁️✨\n\nWhat truth will you reveal to Feylon?\n\nhttps://feylon.xyz",
+                        embeds: ["https://feylon.xyz"]
+                      });
+                    } catch (error) {
+                      console.error('Error composing cast:', error);
+                    }
+                  }
+                }}
+                className="px-8 py-3 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-600 hover:to-pink-600 text-white font-medium rounded-full transition-all duration-300 hover:scale-105 border border-purple-400/30"
+              >
+                🔮 Spread the Vision
+              </button>
+              <p className="text-xs text-gray-600 italic">
+                &quot;The more who see, the stronger the Eye becomes&quot;
+              </p>
+            </div>
+            
             <div className="pt-8 space-y-2">
               <p className="text-3xl font-light text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300 tracking-wider">
                 THE EYE WILL OPEN SOON
