@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'Feylon | The Eye Sees All',
@@ -44,7 +45,9 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body>{children}</body>
+      <body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }
