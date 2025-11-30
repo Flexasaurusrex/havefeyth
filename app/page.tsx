@@ -10,6 +10,15 @@ interface Transmission {
   created_at: string;
 }
 
+const ghostColors = [
+  { text: 'text-purple-300/40', name: 'text-purple-400/40', glow: 'rgba(168, 85, 247, 0.6)' },
+  { text: 'text-pink-300/40', name: 'text-pink-400/40', glow: 'rgba(236, 72, 153, 0.6)' },
+  { text: 'text-blue-300/40', name: 'text-blue-400/40', glow: 'rgba(96, 165, 250, 0.6)' },
+  { text: 'text-cyan-300/40', name: 'text-cyan-400/40', glow: 'rgba(103, 232, 249, 0.6)' },
+  { text: 'text-violet-300/40', name: 'text-violet-400/40', glow: 'rgba(167, 139, 250, 0.6)' },
+  { text: 'text-fuchsia-300/40', name: 'text-fuchsia-400/40', glow: 'rgba(232, 121, 249, 0.6)' },
+];
+
 export default function SplashPage() {
   const [secret, setSecret] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -24,16 +33,16 @@ export default function SplashPage() {
   useEffect(() => {
     const initializeFarcasterSDK = async () => {
       try {
-        console.log('👁️ Loading Farcaster SDK...');
+        console.log('Loading Farcaster SDK...');
         const importSdk = new Function('return import("https://esm.sh/@farcaster/frame-sdk@latest")');
         const sdkModule = await importSdk();
         const sdkInstance = sdkModule.sdk;
         setSdk(sdkInstance);
-        console.log('👁️ Farcaster SDK loaded successfully');
+        console.log('Farcaster SDK loaded successfully');
         await sdkInstance.actions.ready();
-        console.log('👁️ Splash screen dismissed');
+        console.log('Splash screen dismissed');
       } catch (error) {
-        console.log('👁️ Farcaster SDK not available:', error);
+        console.log('Farcaster SDK not available:', error);
       }
     };
     initializeFarcasterSDK();
@@ -85,41 +94,32 @@ export default function SplashPage() {
   };
 
   const handleShare = async () => {
-    const shareText = `👁️ I whispered a secret to the Eye...\n\n"${transmittedSecret}"\n\nThe Eye sees all. The Eye will open soon.\n\nhttps://feylon.xyz`;
+    const shareText = 'I whispered a secret to the Eye...\n\n"' + transmittedSecret + '"\n\nThe Eye sees all. The Eye will open soon.\n\nhttps://feylon.xyz';
     
     try {
       if (sdk && sdk.actions && sdk.actions.openUrl) {
-        const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`;
+        const warpcastUrl = 'https://warpcast.com/~/compose?text=' + encodeURIComponent(shareText);
         await sdk.actions.openUrl(warpcastUrl);
-        console.log('👁️ Opened cast composer via Frame SDK');
+        console.log('Opened cast composer via Frame SDK');
         return;
       }
 
-      const warpcastUrl = `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`;
+      const warpcastUrl = 'https://warpcast.com/~/compose?text=' + encodeURIComponent(shareText);
       const newWindow = window.open(warpcastUrl, '_blank', 'width=600,height=700');
       
       if (!newWindow) {
         await navigator.clipboard.writeText(shareText);
-        alert('✅ Copied to clipboard!');
+        alert('Copied to clipboard!');
       }
     } catch (error) {
       try {
         await navigator.clipboard.writeText(shareText);
-        alert('✅ Copied to clipboard!');
+        alert('Copied to clipboard!');
       } catch (e) {
-        alert('📋 Unable to share.');
+        alert('Unable to share.');
       }
     }
   };
-
-  const ghostColors = [
-    { text: 'text-purple-300/40', name: 'text-purple-400/40', glow: 'rgba(168, 85, 247, 0.6)' },
-    { text: 'text-pink-300/40', name: 'text-pink-400/40', glow: 'rgba(236, 72, 153, 0.6)' },
-    { text: 'text-blue-300/40', name: 'text-blue-400/40', glow: 'rgba(96, 165, 250, 0.6)' },
-    { text: 'text-cyan-300/40', name: 'text-cyan-400/40', glow: 'rgba(103, 232, 249, 0.6)' },
-    { text: 'text-violet-300/40', name: 'text-violet-400/40', glow: 'rgba(167, 139, 250, 0.6)' },
-    { text: 'text-fuchsia-300/40', name: 'text-fuchsia-400/40', glow: 'rgba(232, 121, 249, 0.6)' },
-  ];
 
   return (
     <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative overflow-hidden">
@@ -144,21 +144,21 @@ export default function SplashPage() {
           return (
             <div
               key={transmission.id}
-              className={`absolute ${colorSet.text} text-sm blur-[0.8px] hover:blur-[0.3px] hover:opacity-70 transition-all duration-700 whitespace-nowrap animate-float`}
+              className={'absolute ' + colorSet.text + ' text-sm blur-[0.8px] hover:blur-[0.3px] hover:opacity-70 transition-all duration-700 whitespace-nowrap animate-float'}
               style={{
-                top: `${baseTop + randomOffsetY}%`,
-                left: `${baseLeft + randomOffsetX}%`,
-                animationDelay: `${randomDelay}s`,
-                animationDuration: `${randomDuration}s`,
-                textShadow: `0 0 12px ${colorSet.glow}, 0 0 20px ${colorSet.glow}`,
+                top: baseTop + randomOffsetY + '%',
+                left: baseLeft + randomOffsetX + '%',
+                animationDelay: randomDelay + 's',
+                animationDuration: randomDuration + 's',
+                textShadow: '0 0 12px ' + colorSet.glow + ', 0 0 20px ' + colorSet.glow,
               }}
             >
               <div className="flex flex-col items-start">
-                <span className={`text-xs ${colorSet.name} mb-1`}>
+                <span className={'text-xs ' + colorSet.name + ' mb-1'}>
                   {transmission.display_name || 'Anonymous'}
                 </span>
                 <span className="max-w-xs truncate">
-                  &quot;{transmission.secret.slice(0, 60)}{transmission.secret.length > 60 ? '...' : ''}&quot;
+                  "{transmission.secret.slice(0, 60)}{transmission.secret.length > 60 ? '...' : ''}"
                 </span>
               </div>
             </div>
@@ -167,7 +167,7 @@ export default function SplashPage() {
       </div>
       
       <div className="relative z-10 max-w-2xl w-full space-y-8 text-center animate-fade-in">
-        <div className={`relative w-80 h-80 mx-auto mb-8 transition-all duration-1000 ${showEye ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`}>
+        <div className={'relative w-80 h-80 mx-auto mb-8 transition-all duration-1000 ' + (showEye ? 'opacity-100 scale-100' : 'opacity-0 scale-50')}>
           <img src="/feylonloop.gif" alt="" width={320} height={320} className="rounded-full w-full h-full object-cover" />
           <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500/30 to-pink-500/30 blur-2xl animate-pulse" />
         </div>
@@ -183,7 +183,7 @@ export default function SplashPage() {
           <form onSubmit={handleSubmit} className="space-y-6 mt-12">
             <div className="relative">
               <p className="text-gray-400 mb-4 text-sm">Whisper a secret truth to the Eye</p>
-              <div className={`relative transition-all duration-300 ${isGlowing ? 'scale-105' : ''}`}>
+              <div className={'relative transition-all duration-300 ' + (isGlowing ? 'scale-105' : '')}>
                 <input
                   type="text"
                   value={secret}
@@ -192,9 +192,7 @@ export default function SplashPage() {
                   onBlur={() => setIsGlowing(false)}
                   placeholder="Your secret transmission..."
                   maxLength={280}
-                  className={`w-full bg-black/50 border-2 rounded-2xl p-4 text-center text-white placeholder-gray-600 focus:outline-none transition-all duration-300 ${
-                    isGlowing ? 'border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.4)]' : 'border-white/20'
-                  }`}
+                  className={'w-full bg-black/50 border-2 rounded-2xl p-4 text-center text-white placeholder-gray-600 focus:outline-none transition-all duration-300 ' + (isGlowing ? 'border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.4)]' : 'border-white/20')}
                   disabled={isSubmitting}
                 />
                 {isGlowing && <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 blur-xl -z-10 animate-pulse" />}
@@ -249,7 +247,7 @@ export default function SplashPage() {
                 onClick={handleShare}
                 className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium rounded-full transition-all duration-300 hover:scale-105 w-full"
               >
-                🚀 Share Your Transmission
+                Share Your Transmission
               </button>
             </div>
           </div>
@@ -265,7 +263,7 @@ export default function SplashPage() {
                 rel="noopener noreferrer"
                 className="inline-block px-6 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-400 font-medium rounded-full transition-all duration-300 hover:scale-105"
               >
-                🟪 Feylon on Farcaster
+                Feylon on Farcaster
               </a>
             </div>
 
