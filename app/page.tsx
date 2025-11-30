@@ -19,25 +19,6 @@ export default function SplashPage() {
   const [hasTransmitted, setHasTransmitted] = useState(false);
   const [showEye, setShowEye] = useState(true);
   const [floatingSecrets, setFloatingSecrets] = useState<Transmission[]>([]);
-  const [farcasterSdk, setFarcasterSdk] = useState<any>(null);
-
-  useEffect(() => {
-    const initSDK = async () => {
-      try {
-        console.log('Loading Farcaster SDK...');
-        const importSdk = new Function('return import("https://esm.sh/@farcaster/frame-sdk@latest")');
-        const sdkModule = await importSdk();
-        const sdkInstance = sdkModule.sdk;
-        setFarcasterSdk(sdkInstance);
-        console.log('SDK loaded');
-        await sdkInstance.actions.ready();
-        console.log('Frame ready');
-      } catch (error) {
-        console.log('Not in Frame context');
-      }
-    };
-    initSDK();
-  }, []);
 
   useEffect(() => {
     async function loadSecrets() {
@@ -84,27 +65,10 @@ export default function SplashPage() {
     }
   };
 
-  const shareToFarcaster = async () => {
+  const shareToFarcaster = () => {
     const text = `👁️ I whispered a secret to the Eye...\n\n"${transmittedSecret}"\n\nThe Eye sees all. The Eye will open soon.\n\nhttps://feylon.xyz`;
-    
-    try {
-      if (farcasterSdk && farcasterSdk.actions && farcasterSdk.actions.openUrl) {
-        await farcasterSdk.actions.openUrl(`https://warpcast.com/~/compose?text=${encodeURIComponent(text)}`);
-        return;
-      }
-      const w = window.open(`https://warpcast.com/~/compose?text=${encodeURIComponent(text)}`, '_blank', 'width=600,height=700');
-      if (!w) {
-        await navigator.clipboard.writeText(text);
-        alert('✅ Copied to clipboard!');
-      }
-    } catch (err) {
-      try {
-        await navigator.clipboard.writeText(text);
-        alert('✅ Copied to clipboard!');
-      } catch (e) {
-        alert('📋 Unable to share');
-      }
-    }
+    const url = `https://warpcast.com/~/compose?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank', 'width=600,height=700');
   };
 
   const ghostColors = [
