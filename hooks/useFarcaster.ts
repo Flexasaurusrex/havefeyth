@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import sdk from '@farcaster/frame-sdk';
 
 interface FarcasterUser {
@@ -30,7 +30,6 @@ export function useFarcaster() {
         if (context?.user) {
           setIsInMiniApp(true);
           
-          // Cast to any to handle SDK type variations
           const u = context.user as any;
           
           setUser({
@@ -55,37 +54,10 @@ export function useFarcaster() {
     initFarcaster();
   }, []);
 
-  const sendTransaction = useCallback(async (tx: {
-    to: string;
-    data: string;
-    value?: string;
-  }): Promise<string | null> => {
-    if (!isInMiniApp) return null;
-
-    try {
-      const result = await sdk.actions.sendTransaction({
-        chainId: 'eip155:8453',
-        method: 'eth_sendTransaction',
-        params: {
-          to: tx.to as `0x${string}`,
-          data: tx.data as `0x${string}`,
-          value: tx.value || '0x0',
-        },
-      });
-
-      return result?.transactionHash || null;
-    } catch (error) {
-      console.error('Farcaster sendTransaction error:', error);
-      throw error;
-    }
-  }, [isInMiniApp]);
-
   return {
     isInMiniApp,
     isReady,
     user,
     walletAddress: user?.custodyAddress || null,
-    sdk,
-    sendTransaction,
   };
 }
