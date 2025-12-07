@@ -389,6 +389,9 @@ function MiniAppExperience() {
   const [openRankEligible, setOpenRankEligible] = useState(true);
   const [openRankReason, setOpenRankReason] = useState('');
   const [openRankChecking, setOpenRankChecking] = useState(false);
+  
+  // Prevent re-running handlers
+  const [farcasterHandled, setFarcasterHandled] = useState(false);
 
   const isAdmin = address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
 
@@ -424,9 +427,12 @@ function MiniAppExperience() {
     }
   }, [farcasterUser]);
 
+  // Handle Farcaster user linking - run once when user is ready
   useEffect(() => {
     async function handleFarcasterUser() {
-      if (!farcasterUser || !address) return;
+      if (!farcasterUser || !address || farcasterHandled) return;
+      
+      setFarcasterHandled(true);
       
       const existingProfile = await findUserProfile(
         farcasterUser.fid.toString(),
@@ -450,15 +456,22 @@ function MiniAppExperience() {
     if (isReady && farcasterUser) {
       handleFarcasterUser();
     }
-  }, [isReady, farcasterUser, address, refresh]);
+  }, [isReady, farcasterUser, address, farcasterHandled, refresh]);
 
+  // Only OPEN onboarding when conditions are met - never auto-close it
+  // Closing happens via onComplete callback or when profile is created
   useEffect(() => {
     if (isConnected && !profileLoading && !hasProfile && address && isReady) {
       setShowOnboarding(true);
-    } else {
-      setShowOnboarding(false);
     }
   }, [isConnected, profileLoading, hasProfile, address, isReady]);
+
+  // Close onboarding when profile is created
+  useEffect(() => {
+    if (hasProfile && showOnboarding) {
+      setShowOnboarding(false);
+    }
+  }, [hasProfile, showOnboarding]);
 
   // Load interactions once on mount - no polling
   useEffect(() => {
