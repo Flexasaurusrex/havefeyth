@@ -17,7 +17,6 @@ import { useReadContract } from 'wagmi';
 
 export const dynamic = 'force-dynamic';
 
-// Floating ghost message component
 function FloatingTransmission({ message, style, delay }: { message: string; style: React.CSSProperties; delay: number }) {
   return (
     <div
@@ -33,7 +32,6 @@ function FloatingTransmission({ message, style, delay }: { message: string; styl
   );
 }
 
-// Floating transmissions layer
 function FloatingTransmissions({ interactions }: { interactions: Interaction[] }) {
   const ghostMessages = useMemo(() => {
     if (interactions.length === 0) return [];
@@ -81,7 +79,6 @@ function FloatingTransmissions({ interactions }: { interactions: Interaction[] }
 }
 
 export default function Home() {
-  // Use unified wallet context
   const { 
     isConnected, 
     isReady, 
@@ -89,6 +86,7 @@ export default function Home() {
     isInMiniApp, 
     farcasterUser,
     sendContractTransaction,
+    openUrl,
     isPending,
     isConfirming,
     isConfirmed,
@@ -127,7 +125,6 @@ export default function Home() {
 
   const isAdmin = address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
 
-  // Preview rewards (still use wagmi for read)
   const { data: previewRewards } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
@@ -135,12 +132,10 @@ export default function Home() {
     args: address ? [address as `0x${string}`] : undefined,
   });
 
-  // Handle Farcaster mini app profile linking
   useEffect(() => {
     async function handleFarcasterUser() {
       if (!isInMiniApp || !farcasterUser || !address) return;
       
-      // Try to find existing profile by farcaster handle
       const existingProfile = await findUserProfile(
         farcasterUser.fid.toString(),
         farcasterUser.username,
@@ -148,7 +143,6 @@ export default function Home() {
       );
       
       if (existingProfile) {
-        // Link FID if not already linked
         if (!existingProfile.farcaster_fid) {
           await linkFidToProfile(
             farcasterUser.fid.toString(),
@@ -166,7 +160,6 @@ export default function Home() {
     }
   }, [isReady, isInMiniApp, farcasterUser, address, refresh]);
 
-  // Show onboarding for new users
   useEffect(() => {
     if (isConnected && !profileLoading && !hasProfile && address && isReady) {
       setShowOnboarding(true);
@@ -314,7 +307,7 @@ export default function Home() {
     setIsGlowing(e.target.value.length > 0);
   }
 
-  function handleShareClick(platform: 'twitter' | 'farcaster') {
+  async function handleShareClick(platform: 'twitter' | 'farcaster') {
     if (!isConnected || !address || !message.trim()) return;
     
     if (!canShareState) {
@@ -331,7 +324,7 @@ export default function Home() {
       : `https://warpcast.com/~/compose?text=${encodeURIComponent(shareText)}`;
     
     setShareUrl(shareLink);
-    window.open(shareLink, '_blank', 'width=600,height=400');
+    await openUrl(shareLink);
     setTimeout(() => setShowShareConfirm(true), 500);
   }
 
@@ -405,7 +398,6 @@ export default function Home() {
         return;
       }
       
-      // Use unified transaction sender
       const result = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_MULTI_REWARD_ABI,
@@ -491,7 +483,6 @@ export default function Home() {
     }
   }
 
-  // Show loading state while detecting environment
   if (!isReady) {
     return (
       <main className="min-h-screen flex flex-col items-center justify-center p-4">
@@ -507,7 +498,6 @@ export default function Home() {
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden relative">
       <FloatingTransmissions interactions={interactions} />
 
-      {/* Mini app indicator */}
       {isInMiniApp && (
         <div className="fixed top-4 left-4 z-40 px-3 py-1 bg-purple-600/80 backdrop-blur-sm rounded-full text-xs text-white">
           🟪 Warpcast
@@ -600,14 +590,12 @@ export default function Home() {
                   </button>
                 </div>
 
-                {/* Only show ConnectButton disconnect option if NOT in mini app */}
                 {!isInMiniApp && (
                   <div className="p-4 border-t border-white/10">
                     <ConnectButton />
                   </div>
                 )}
                 
-                {/* Show wallet address in mini app */}
                 {isInMiniApp && address && (
                   <div className="p-4 border-t border-white/10 text-center">
                     <div className="text-xs text-gray-400">Warplet</div>
@@ -643,7 +631,6 @@ export default function Home() {
         {!isConnected ? (
           <div className="text-center space-y-4 px-4">
             <p className="text-gray-400 text-base md:text-lg">Connect to share your message of goodwill or make your confession</p>
-            {/* Only show ConnectButton if NOT in mini app (mini app auto-connects) */}
             {!isInMiniApp ? (
               <div className="flex justify-center"><ConnectButton /></div>
             ) : (
@@ -842,7 +829,7 @@ export default function Home() {
                             const shareText = `Check out this Feylon ${authorCredit}:\n\n"${feylon.message}"\n\nShared via FEYLON 👁️\n${window.location.origin}`;
                             const encodedText = encodeURIComponent(shareText);
                             const shareUrlLink = feylon.shared_platform === 'twitter' ? `https://twitter.com/intent/tweet?text=${encodedText}` : `https://warpcast.com/~/compose?text=${encodedText}`;
-                            window.open(shareUrlLink, '_blank', 'width=600,height=400');
+                            openUrl(shareUrlLink);
                           }} className="ml-auto px-2 md:px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors text-xs whitespace-nowrap">🔄 Share</button>
                         )}
                       </div>
