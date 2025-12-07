@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import sdk from '@farcaster/frame-sdk';
 
 interface FarcasterUser {
   fid: number;
@@ -15,42 +16,34 @@ export function useFarcaster() {
   const [isInMiniApp, setIsInMiniApp] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [user, setUser] = useState<FarcasterUser | null>(null);
-  const [sdk, setSdk] = useState<any>(null);
 
   useEffect(() => {
     async function initFarcaster() {
-      if (typeof window === 'undefined') return;
-
-      // Check for Farcaster SDK
-      const farcasterSDK = (window as any).farcaster;
-      
-      if (!farcasterSDK) {
+      if (typeof window === 'undefined') {
         setIsReady(true);
         return;
       }
 
       try {
-        setSdk(farcasterSDK);
-        setIsInMiniApp(true);
-
-        await farcasterSDK.ready();
-
-        const context = await farcasterSDK.context;
+        const context = await sdk.context;
         
         if (context?.user) {
+          setIsInMiniApp(true);
           setUser({
             fid: context.user.fid,
-            username: context.user.username,
+            username: context.user.username || '',
             displayName: context.user.displayName,
             pfpUrl: context.user.pfpUrl,
-            custodyAddress: context.user.custodyAddress,
-            verifiedAddresses: context.user.verifiedAddresses || [],
+            custodyAddress: context.user.custody_address || '',
+            verifiedAddresses: context.user.verified_addresses?.eth_addresses || [],
           });
+          
+          await sdk.actions.ready();
         }
-
+        
         setIsReady(true);
       } catch (error) {
-        console.error('Error initializing Farcaster SDK:', error);
+        console.log('Not in Farcaster mini app:', error);
         setIsReady(true);
       }
     }
@@ -63,15 +56,15 @@ export function useFarcaster() {
     data: string;
     value?: string;
   }): Promise<string | null> => {
-    if (!sdk || !isInMiniApp) return null;
+    if (!isInMiniApp) return null;
 
     try {
       const result = await sdk.actions.sendTransaction({
         chainId: 'eip155:8453',
         method: 'eth_sendTransaction',
         params: {
-          to: tx.to,
-          data: tx.data,
+          to: tx.to as `0x${string}`,
+          data: tx.data as `0x${string}`,
           value: tx.value || '0x0',
         },
       });
@@ -81,7 +74,7 @@ export function useFarcaster() {
       console.error('Farcaster sendTransaction error:', error);
       throw error;
     }
-  }, [sdk, isInMiniApp]);
+  }, [isInMiniApp]);
 
   return {
     isInMiniApp,
