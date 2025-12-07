@@ -264,34 +264,24 @@ function SplashExperience() {
         <div className="pt-12 space-y-6">
           <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-500/30 rounded-2xl p-6 space-y-4">
             <p className="text-white font-medium">🎁 Earn rewards by sharing on Farcaster</p>
-            <p className="text-gray-400 text-sm">Join the Eye on Warpcast to share Feylons, earn points, and claim token rewards.</p>
-            <a
-              href="https://warpcast.com/~/add-cast-action?url=https://feylon.xyz"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-block px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-full transition-all duration-300 hover:scale-105"
-            >
-              🟪 Open in Warpcast
-            </a>
-          </div>
-          
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <p className="text-gray-400 text-sm">Open Warpcast → Mini Apps → Search "Feylon" to start sharing and earning.</p>
             <a
               href="https://warpcast.com/feylon"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-400 font-medium rounded-full transition-all duration-300 hover:scale-105"
+              className="inline-block px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-full transition-all duration-300 hover:scale-105"
             >
-              🟪 Follow @feylon
+              🟪 Follow @feylon on Warpcast
             </a>
-            <a
-              href="https://warpcast.com/~/channel/feylon"
-              target="_blank"
-              rel="noopener noreferrer"
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link
+              href="/about"
               className="px-6 py-2 bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/50 text-pink-400 font-medium rounded-full transition-all duration-300 hover:scale-105"
             >
-              📢 /feylon channel
-            </a>
+              👁️ What is Feylon?
+            </Link>
           </div>
         </div>
 
