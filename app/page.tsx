@@ -17,6 +17,33 @@ import { useReadContract } from 'wagmi';
 
 export const dynamic = 'force-dynamic';
 
+// Fixed positions to prevent overlap
+const TRANSMISSION_POSITIONS = [
+  { left: '3%', top: '8%' },
+  { left: '75%', top: '5%' },
+  { left: '5%', top: '25%' },
+  { left: '80%', top: '22%' },
+  { left: '2%', top: '45%' },
+  { left: '78%', top: '42%' },
+  { left: '4%', top: '65%' },
+  { left: '76%', top: '62%' },
+  { left: '3%', top: '82%' },
+  { left: '80%', top: '80%' },
+  { left: '6%', top: '92%' },
+  { left: '74%', top: '90%' },
+];
+
+const AVATAR_POSITIONS = [
+  { left: '8%', top: '15%' },
+  { left: '88%', top: '12%' },
+  { left: '6%', top: '38%' },
+  { left: '90%', top: '35%' },
+  { left: '5%', top: '58%' },
+  { left: '87%', top: '55%' },
+  { left: '7%', top: '78%' },
+  { left: '89%', top: '75%' },
+];
+
 function FloatingTransmission({ message, style, delay }: { message: string; style: React.CSSProperties; delay: number }) {
   return (
     <div
@@ -27,7 +54,7 @@ function FloatingTransmission({ message, style, delay }: { message: string; styl
         opacity: 0,
       }}
     >
-      <span className="text-sm md:text-base italic">"{message.length > 60 ? message.slice(0, 60) + '...' : message}"</span>
+      <span className="text-sm md:text-base italic">"{message.length > 50 ? message.slice(0, 50) + '...' : message}"</span>
     </div>
   );
 }
@@ -38,28 +65,26 @@ function FloatingTransmissions({ interactions }: { interactions: Interaction[] }
     
     const messages = interactions.slice(0, 12);
     
-    return messages.map((interaction, i) => {
-      const colors = [
-        'rgba(255, 255, 255, 0.25)',
-        'rgba(200, 200, 200, 0.22)',
-        'rgba(245, 245, 220, 0.23)',
-        'rgba(220, 220, 220, 0.20)',
-        'rgba(255, 250, 240, 0.22)',
-      ];
-      
-      return {
-        id: interaction.id,
-        message: interaction.message,
-        style: {
-          left: `${5 + Math.random() * 85}%`,
-          top: `${10 + Math.random() * 75}%`,
-          color: colors[i % colors.length],
-          fontSize: `${0.7 + Math.random() * 0.4}rem`,
-          transform: `rotate(${-8 + Math.random() * 16}deg)`,
-        },
-        delay: i * 3 + Math.random() * 5,
-      };
-    });
+    const colors = [
+      'rgba(255, 255, 255, 0.22)',
+      'rgba(200, 200, 200, 0.20)',
+      'rgba(245, 245, 220, 0.21)',
+      'rgba(220, 220, 220, 0.19)',
+      'rgba(255, 250, 240, 0.20)',
+    ];
+    
+    return messages.map((interaction, i) => ({
+      id: interaction.id,
+      message: interaction.message,
+      style: {
+        left: TRANSMISSION_POSITIONS[i % TRANSMISSION_POSITIONS.length].left,
+        top: TRANSMISSION_POSITIONS[i % TRANSMISSION_POSITIONS.length].top,
+        color: colors[i % colors.length],
+        fontSize: `${0.75 + (i % 3) * 0.1}rem`,
+        transform: `rotate(${i % 2 === 0 ? -3 : 3}deg)`,
+      },
+      delay: i * 2.5,
+    }));
   }, [interactions]);
 
   if (ghostMessages.length === 0) return null;
@@ -82,18 +107,30 @@ function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
   const avatars = useMemo(() => {
     if (interactions.length === 0) return [];
     
-    // Get unique wallet addresses
-    const uniqueWallets = Array.from(new Set(interactions.map(i => i.wallet_address))).slice(0, 8);
+    // Get unique users with their profile images
+    const seenWallets = new Set<string>();
+    const uniqueUsers: { wallet: string; imageUrl?: string }[] = [];
     
-    return uniqueWallets.map((wallet, i) => ({
-      wallet,
+    for (const interaction of interactions) {
+      if (!seenWallets.has(interaction.wallet_address) && uniqueUsers.length < 8) {
+        seenWallets.add(interaction.wallet_address);
+        uniqueUsers.push({
+          wallet: interaction.wallet_address,
+          imageUrl: (interaction as any).profile_image_url,
+        });
+      }
+    }
+    
+    return uniqueUsers.map((user, i) => ({
+      wallet: user.wallet,
+      imageUrl: user.imageUrl,
       style: {
-        left: `${10 + Math.random() * 80}%`,
-        top: `${15 + Math.random() * 70}%`,
+        left: AVATAR_POSITIONS[i % AVATAR_POSITIONS.length].left,
+        top: AVATAR_POSITIONS[i % AVATAR_POSITIONS.length].top,
       },
-      opacity: 0.15 + Math.random() * 0.15,
-      scale: 0.6 + Math.random() * 0.4,
-      delay: i * 4 + Math.random() * 8,
+      opacity: 0.18 + (i % 3) * 0.05,
+      scale: 0.7 + (i % 3) * 0.15,
+      delay: i * 3.5,
     }));
   }, [interactions]);
 
@@ -113,7 +150,11 @@ function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
             animationDelay: `${avatar.delay}s`,
           }}
         >
-          <Avatar walletAddress={avatar.wallet} size={40} />
+          <Avatar 
+            walletAddress={avatar.wallet} 
+            customImageUrl={avatar.imageUrl}
+            size={48} 
+          />
         </div>
       ))}
     </div>
@@ -1025,33 +1066,33 @@ export default function Home() {
           }
           100% {
             opacity: 0;
-            transform: translateY(-30px) translateX(20px);
+            transform: translateY(-30px) translateX(10px);
           }
         }
         
         .animate-float-transmission {
-          animation: float-transmission 25s ease-in-out infinite;
+          animation: float-transmission 20s ease-in-out infinite;
         }
         
         @keyframes float-avatar {
           0% {
             opacity: 0;
-            transform: translateY(30px) rotate(-5deg);
+            transform: translateY(20px) scale(var(--scale, 1));
           }
           15% {
-            opacity: 0.25;
+            opacity: var(--opacity, 0.2);
           }
           85% {
-            opacity: 0.25;
+            opacity: var(--opacity, 0.2);
           }
           100% {
             opacity: 0;
-            transform: translateY(-40px) rotate(5deg);
+            transform: translateY(-30px) scale(var(--scale, 1));
           }
         }
         
         .animate-float-avatar {
-          animation: float-avatar 30s ease-in-out infinite;
+          animation: float-avatar 25s ease-in-out infinite;
         }
       `}</style>
     </main>
