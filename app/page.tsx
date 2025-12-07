@@ -1,10 +1,9 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Image from 'next/image';
-import { recordInteraction, getAllInteractions, getUserProfile, getUserStats, canUserConfess, canUserShare, recordConfession, deleteInteraction } from '@/lib/supabase';
+import { recordInteraction, getAllInteractions, getUserProfile, getUserStats, canUserConfess, canUserShare, recordConfession, deleteInteraction, findUserProfile, linkFidToProfile } from '@/lib/supabase';
 import type { Interaction, UserProfile, UserStats } from '@/lib/supabase';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI } from '@/lib/contract';
 import { RewardToast, type RewardItem } from '@/components/RewardToast';
@@ -13,6 +12,8 @@ import { OnboardingModal } from '@/components/OnboardingModal';
 import { useProfile } from '@/hooks/useProfile';
 import { Avatar } from '@/components/PixelGhost';
 import Link from 'next/link';
+import { useWallet } from '@/contexts/WalletContext';
+import { useReadContract } from 'wagmi';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,17 +38,15 @@ function FloatingTransmissions({ interactions }: { interactions: Interaction[] }
   const ghostMessages = useMemo(() => {
     if (interactions.length === 0) return [];
     
-    // Take up to 12 recent messages for floating display
     const messages = interactions.slice(0, 12);
     
-    // Generate random positions and properties for each
     return messages.map((interaction, i) => {
       const colors = [
         'rgba(255, 255, 255, 0.08)',
         'rgba(200, 200, 200, 0.06)',
-        'rgba(245, 245, 220, 0.07)', // cream
+        'rgba(245, 245, 220, 0.07)',
         'rgba(220, 220, 220, 0.05)',
-        'rgba(255, 250, 240, 0.06)', // off-white
+        'rgba(255, 250, 240, 0.06)',
       ];
       
       return {
@@ -82,10 +81,22 @@ function FloatingTransmissions({ interactions }: { interactions: Interaction[] }
 }
 
 export default function Home() {
-  const { address, isConnected } = useAccount();
+  // Use unified wallet context
+  const { 
+    isConnected, 
+    isReady, 
+    address, 
+    isInMiniApp, 
+    farcasterUser,
+    sendContractTransaction,
+    isPending,
+    isConfirming,
+    isConfirmed,
+    txHash,
+    resetTxState
+  } = useWallet();
+  
   const { hasProfile, loading: profileLoading, refresh } = useProfile();
-  const { writeContractAsync, data: hash } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
   
   const [message, setMessage] = useState('');
   const [isGlowing, setIsGlowing] = useState(false);
@@ -110,40 +121,59 @@ export default function Home() {
   const [nextConfessionDate, setNextConfessionDate] = useState<Date | null>(null);
   const [confessionCooldown, setConfessionCooldown] = useState('');
 
-  // Share cooldown state
   const [canShareState, setCanShareState] = useState(true);
   const [nextShareDate, setNextShareDate] = useState<Date | null>(null);
   const [shareCooldown, setShareCooldown] = useState('');
 
   const isAdmin = address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
 
-  // Initialize Farcaster SDK for Frame support
-  useEffect(() => {
-    const checkSDK = () => {
-      if (typeof window !== 'undefined' && (window as any).farcasterSDK) {
-        (window as any).farcasterSDK.actions.ready().catch(console.error);
-      } else {
-        setTimeout(checkSDK, 100);
-      }
-    };
-    
-    checkSDK();
-  }, []);
-
+  // Preview rewards (still use wagmi for read)
   const { data: previewRewards } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
     functionName: 'previewClaim',
-    args: address ? [address] : undefined,
+    args: address ? [address as `0x${string}`] : undefined,
   });
 
+  // Handle Farcaster mini app profile linking
   useEffect(() => {
-    if (isConnected && !profileLoading && !hasProfile && address) {
+    async function handleFarcasterUser() {
+      if (!isInMiniApp || !farcasterUser || !address) return;
+      
+      // Try to find existing profile by farcaster handle
+      const existingProfile = await findUserProfile(
+        farcasterUser.fid.toString(),
+        farcasterUser.username,
+        address
+      );
+      
+      if (existingProfile) {
+        // Link FID if not already linked
+        if (!existingProfile.farcaster_fid) {
+          await linkFidToProfile(
+            farcasterUser.fid.toString(),
+            farcasterUser.username,
+            address
+          );
+        }
+        setUserProfile(existingProfile as UserProfile);
+        refresh();
+      }
+    }
+    
+    if (isReady && isInMiniApp && farcasterUser) {
+      handleFarcasterUser();
+    }
+  }, [isReady, isInMiniApp, farcasterUser, address, refresh]);
+
+  // Show onboarding for new users
+  useEffect(() => {
+    if (isConnected && !profileLoading && !hasProfile && address && isReady) {
       setShowOnboarding(true);
     } else {
       setShowOnboarding(false);
     }
-  }, [isConnected, profileLoading, hasProfile, address]);
+  }, [isConnected, profileLoading, hasProfile, address, isReady]);
 
   useEffect(() => {
     async function loadInteractions() {
@@ -191,7 +221,6 @@ export default function Home() {
     }
   }, [address, isConnected, hasProfile]);
 
-  // Check share cooldown
   useEffect(() => {
     async function checkShare() {
       if (!address) return;
@@ -244,7 +273,6 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [nextConfessionDate, canConfess]);
 
-  // Share cooldown timer
   useEffect(() => {
     if (!nextShareDate || canShareState) {
       setShareCooldown('');
@@ -289,7 +317,6 @@ export default function Home() {
   function handleShareClick(platform: 'twitter' | 'farcaster') {
     if (!isConnected || !address || !message.trim()) return;
     
-    // Check cooldown before opening share dialog
     if (!canShareState) {
       alert(`Please wait! Next share available in ${shareCooldown}`);
       return;
@@ -311,7 +338,6 @@ export default function Home() {
   async function handleConfession() {
     if (!address || !message.trim()) return;
     
-    // Don't trust button state alone
     if (!canConfess) {
       alert('Please wait for the cooldown period to end');
       return;
@@ -372,7 +398,6 @@ export default function Home() {
         userProfile?.farcaster_handle
       );
       
-      // Check if cooldown blocked it
       if (!interactionResult.success) {
         alert(interactionResult.error || 'You must wait before sharing again!');
         setIsSharing(false);
@@ -380,7 +405,8 @@ export default function Home() {
         return;
       }
       
-      const result = await writeContractAsync({
+      // Use unified transaction sender
+      const result = await sendContractTransaction({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_MULTI_REWARD_ABI,
         functionName: 'claimReward',
@@ -465,10 +491,28 @@ export default function Home() {
     }
   }
 
+  // Show loading state while detecting environment
+  if (!isReady) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <div className="text-6xl animate-pulse">👁️</div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden relative">
-      {/* Floating ghostly transmissions background */}
       <FloatingTransmissions interactions={interactions} />
+
+      {/* Mini app indicator */}
+      {isInMiniApp && (
+        <div className="fixed top-4 left-4 z-40 px-3 py-1 bg-purple-600/80 backdrop-blur-sm rounded-full text-xs text-white">
+          🟪 Warpcast
+        </div>
+      )}
 
       {isConnected && hasProfile && userProfile && (
         <div className="fixed top-4 right-4 z-40">
@@ -479,11 +523,13 @@ export default function Home() {
             >
               <Avatar
                 walletAddress={address!}
-                customImageUrl={userProfile.profile_image_url}
+                customImageUrl={userProfile.profile_image_url || farcasterUser?.pfpUrl}
                 size={32}
               />
               <div className="hidden md:block text-left">
-                <div className="text-sm font-bold text-white">{userProfile.display_name}</div>
+                <div className="text-sm font-bold text-white">
+                  {userProfile.display_name || farcasterUser?.displayName || farcasterUser?.username}
+                </div>
                 {userStats && (
                   <div className="text-xs text-purple-300">{userStats.total_points} points</div>
                 )}
@@ -554,9 +600,22 @@ export default function Home() {
                   </button>
                 </div>
 
-                <div className="p-4 border-t border-white/10">
-                  <ConnectButton />
-                </div>
+                {/* Only show ConnectButton disconnect option if NOT in mini app */}
+                {!isInMiniApp && (
+                  <div className="p-4 border-t border-white/10">
+                    <ConnectButton />
+                  </div>
+                )}
+                
+                {/* Show wallet address in mini app */}
+                {isInMiniApp && address && (
+                  <div className="p-4 border-t border-white/10 text-center">
+                    <div className="text-xs text-gray-400">Warplet</div>
+                    <div className="text-xs text-purple-400 font-mono">
+                      {address.slice(0, 6)}...{address.slice(-4)}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -584,7 +643,14 @@ export default function Home() {
         {!isConnected ? (
           <div className="text-center space-y-4 px-4">
             <p className="text-gray-400 text-base md:text-lg">Connect to share your message of goodwill or make your confession</p>
-            <div className="flex justify-center"><ConnectButton /></div>
+            {/* Only show ConnectButton if NOT in mini app (mini app auto-connects) */}
+            {!isInMiniApp ? (
+              <div className="flex justify-center"><ConnectButton /></div>
+            ) : (
+              <div className="text-center text-purple-400">
+                <div className="animate-pulse">Connecting to Warplet...</div>
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -657,8 +723,8 @@ export default function Home() {
                       </>
                     ) : (
                       <div className="flex gap-3 md:gap-4 justify-center flex-col sm:flex-row">
-                        <button onClick={() => handleShareClick('twitter')} disabled={isSharing || isConfirming} className="px-6 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on 𝕏 (10pts)</button>
-                        <button onClick={() => handleShareClick('farcaster')} disabled={isSharing || isConfirming} className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on Farcaster (10pts)</button>
+                        <button onClick={() => handleShareClick('twitter')} disabled={isSharing || isConfirming || isPending} className="px-6 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on 𝕏 (10pts)</button>
+                        <button onClick={() => handleShareClick('farcaster')} disabled={isSharing || isConfirming || isPending} className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on Farcaster (10pts)</button>
                       </div>
                     )}
                   </div>
@@ -670,8 +736,15 @@ export default function Home() {
 
             {!hasProfile && (
               <div className="text-center space-y-2">
-                <p className="text-gray-500 text-sm">Connected: {address?.slice(0, 6)}...{address?.slice(-4)}</p>
-                <div className="flex justify-center"><ConnectButton /></div>
+                <p className="text-gray-500 text-sm">
+                  {isInMiniApp && farcasterUser 
+                    ? `Connected as @${farcasterUser.username}` 
+                    : `Connected: ${address?.slice(0, 6)}...${address?.slice(-4)}`
+                  }
+                </p>
+                {!isInMiniApp && (
+                  <div className="flex justify-center"><ConnectButton /></div>
+                )}
               </div>
             )}
           </>
@@ -697,8 +770,8 @@ export default function Home() {
           <div className="space-y-3">
             {interactions.slice(0, 20).map((feylon, index) => {
               const displayName = feylon.display_name || 'Anon';
-              const hasProfile = feylon.display_name || feylon.twitter_handle || feylon.farcaster_handle;
-              const isConfession = feylon.is_confession;
+              const hasFeylonProfile = feylon.display_name || feylon.twitter_handle || feylon.farcaster_handle;
+              const isConfessionPost = feylon.is_confession;
               
               return (
                 <div key={feylon.id} className="group bg-gradient-to-r from-purple-900/10 to-pink-900/10 backdrop-blur-sm border border-white/10 rounded-xl p-3 md:p-4 hover:border-purple-500/30 transition-all duration-200 animate-fade-in relative" style={{ animationDelay: `${index * 0.05}s` }}>
@@ -721,7 +794,7 @@ export default function Home() {
                     <div className="flex-shrink-0">
                       <Avatar
                         walletAddress={feylon.wallet_address}
-                        customImageUrl={hasProfile ? (feylon as any).profile_image_url : null}
+                        customImageUrl={hasFeylonProfile ? (feylon as any).profile_image_url : null}
                         size={40}
                       />
                     </div>
@@ -730,13 +803,13 @@ export default function Home() {
                       <div className="flex items-center gap-2 mb-2 flex-wrap text-xs md:text-sm">
                         <span className="font-semibold text-white truncate">{displayName}</span>
                         
-                        {isConfession && (
+                        {isConfessionPost && (
                           <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded">
                             🤫 Confession
                           </span>
                         )}
                         
-                        {hasProfile && !isConfession && (
+                        {hasFeylonProfile && !isConfessionPost && (
                           <>
                             {feylon.twitter_handle && <a href={`https://twitter.com/${feylon.twitter_handle}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 transition-colors truncate">@{feylon.twitter_handle}</a>}
                             {feylon.farcaster_handle && <a href={`https://warpcast.com/${feylon.farcaster_handle}`} target="_blank" rel="noopener noreferrer" className="text-xs text-purple-400 hover:text-purple-300 transition-colors truncate">@{feylon.farcaster_handle}</a>}
@@ -751,25 +824,25 @@ export default function Home() {
                       <p className="text-gray-300 text-sm md:text-base leading-relaxed mb-3 break-words">"{feylon.message}"</p>
 
                       <div className="flex items-center gap-2 md:gap-3 text-xs flex-wrap">
-                        {!isConfession && (
+                        {!isConfessionPost && (
                           <span className={`px-2 py-1 rounded text-xs ${feylon.shared_platform === 'twitter' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
                             {feylon.shared_platform === 'twitter' ? '𝕏' : '🟪'}
                           </span>
                         )}
                         
-                        {feylon.claimed && !isConfession && (
+                        {feylon.claimed && !isConfessionPost && (
                           <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">
                             ✓ Claimed
                           </span>
                         )}
                         
-                        {!isConfession && (
+                        {!isConfessionPost && (
                           <button onClick={() => {
-                            const authorCredit = hasProfile ? `by ${displayName}${feylon.twitter_handle ? ` (@${feylon.twitter_handle})` : ''}` : `by Anon (${feylon.wallet_address.slice(0, 6)}...${feylon.wallet_address.slice(-4)})`;
+                            const authorCredit = hasFeylonProfile ? `by ${displayName}${feylon.twitter_handle ? ` (@${feylon.twitter_handle})` : ''}` : `by Anon (${feylon.wallet_address.slice(0, 6)}...${feylon.wallet_address.slice(-4)})`;
                             const shareText = `Check out this Feylon ${authorCredit}:\n\n"${feylon.message}"\n\nShared via FEYLON 👁️\n${window.location.origin}`;
                             const encodedText = encodeURIComponent(shareText);
-                            const shareUrl = feylon.shared_platform === 'twitter' ? `https://twitter.com/intent/tweet?text=${encodedText}` : `https://warpcast.com/~/compose?text=${encodedText}`;
-                            window.open(shareUrl, '_blank', 'width=600,height=400');
+                            const shareUrlLink = feylon.shared_platform === 'twitter' ? `https://twitter.com/intent/tweet?text=${encodedText}` : `https://warpcast.com/~/compose?text=${encodedText}`;
+                            window.open(shareUrlLink, '_blank', 'width=600,height=400');
                           }} className="ml-auto px-2 md:px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors text-xs whitespace-nowrap">🔄 Share</button>
                         )}
                       </div>
@@ -811,7 +884,7 @@ export default function Home() {
 
             <div className="flex gap-3">
               <button onClick={handleCancelShare} className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors">Cancel</button>
-              <button onClick={handleClaimAfterShare} disabled={isSharing || isConfirming} className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">{isSharing || isConfirming ? 'Claiming...' : 'Yes, I Shared! 🎁'}</button>
+              <button onClick={handleClaimAfterShare} disabled={isSharing || isConfirming || isPending} className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">{isSharing || isConfirming || isPending ? 'Claiming...' : 'Yes, I Shared! 🎁'}</button>
             </div>
           </div>
         </div>
@@ -893,7 +966,11 @@ export default function Home() {
       )}
 
       {showOnboarding && address && (
-        <OnboardingModal walletAddress={address} onComplete={() => { setShowOnboarding(false); refresh(); }} />
+        <OnboardingModal 
+          walletAddress={address} 
+          onComplete={() => { setShowOnboarding(false); refresh(); }} 
+          farcasterUser={farcasterUser || undefined}
+        />
       )}
 
       {showToast && claimedRewards.length > 0 && (
