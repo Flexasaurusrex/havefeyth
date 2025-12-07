@@ -22,6 +22,7 @@ interface WalletContextType {
     args?: any[];
     value?: bigint;
   }) => Promise<string | null>;
+  openUrl: (url: string) => Promise<void>;
   isPending: boolean;
   isConfirming: boolean;
   isConfirmed: boolean;
@@ -43,9 +44,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     isReady: farcasterReady, 
     user: farcasterUser, 
     walletAddress: farcasterAddress,
+    openUrl,
   } = useFarcaster();
   
-  // Use farcaster address if in mini app and available, otherwise wagmi
   const isConnected = isInMiniApp ? (!!farcasterAddress || wagmiConnected) : wagmiConnected;
   const address = isInMiniApp ? (farcasterAddress || wagmiAddress) : wagmiAddress;
   const isReady = farcasterReady;
@@ -57,7 +58,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     args?: any[];
     value?: bigint;
   }): Promise<string | null> => {
-    // Always use wagmi for transactions
     const hash = await writeContractAsync({
       address: params.address,
       abi: params.abi,
@@ -86,6 +86,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         pfpUrl: farcasterUser.pfpUrl,
       } : null,
       sendContractTransaction,
+      openUrl,
       isPending,
       isConfirming: wagmiConfirming,
       isConfirmed: wagmiConfirmed,
