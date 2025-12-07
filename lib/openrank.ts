@@ -23,8 +23,10 @@ export async function checkOpenRank(fid: number): Promise<OpenRankResult> {
   }
 
   try {
-    const res = await fetch(`${OPENRANK_API}?fids=${fid}`, {
+    const res = await fetch(OPENRANK_API, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify([fid])
     });
     
     if (!res.ok) {
