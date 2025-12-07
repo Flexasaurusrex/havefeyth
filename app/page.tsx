@@ -17,120 +17,21 @@ import { useReadContract } from 'wagmi';
 
 export const dynamic = 'force-dynamic';
 
-// Fixed positions to prevent overlap
-const TRANSMISSION_POSITIONS = [
-  { left: '3%', top: '8%' },
-  { left: '75%', top: '5%' },
-  { left: '5%', top: '25%' },
-  { left: '80%', top: '22%' },
-  { left: '2%', top: '45%' },
-  { left: '78%', top: '42%' },
-  { left: '4%', top: '65%' },
-  { left: '76%', top: '62%' },
-  { left: '3%', top: '82%' },
-  { left: '80%', top: '80%' },
-  { left: '6%', top: '92%' },
-  { left: '74%', top: '90%' },
-];
-
-const AVATAR_POSITIONS = [
-  { left: '8%', top: '15%' },
-  { left: '88%', top: '12%' },
-  { left: '6%', top: '38%' },
-  { left: '90%', top: '35%' },
-  { left: '5%', top: '58%' },
-  { left: '87%', top: '55%' },
-  { left: '7%', top: '78%' },
-  { left: '89%', top: '75%' },
-];
-
-function FloatingTransmission({ message, style, delay }: { message: string; style: React.CSSProperties; delay: number }) {
-  return (
-    <div
-      className="fixed pointer-events-none select-none whitespace-nowrap animate-float-transmission"
-      style={{
-        ...style,
-        animationDelay: `${delay}s`,
-        opacity: 0,
-      }}
-    >
-      <span className="text-sm md:text-base italic">"{message.length > 50 ? message.slice(0, 50) + '...' : message}"</span>
-    </div>
-  );
-}
-
-function FloatingTransmissions({ interactions }: { interactions: Interaction[] }) {
-  const ghostMessages = useMemo(() => {
-    if (interactions.length === 0) return [];
-    
-    const messages = interactions.slice(0, 12);
-    
-    const colors = [
-      'rgba(255, 255, 255, 0.22)',
-      'rgba(200, 200, 200, 0.20)',
-      'rgba(245, 245, 220, 0.21)',
-      'rgba(220, 220, 220, 0.19)',
-      'rgba(255, 250, 240, 0.20)',
-    ];
-    
-    return messages.map((interaction, i) => ({
-      id: interaction.id,
-      message: interaction.message,
-      style: {
-        left: TRANSMISSION_POSITIONS[i % TRANSMISSION_POSITIONS.length].left,
-        top: TRANSMISSION_POSITIONS[i % TRANSMISSION_POSITIONS.length].top,
-        color: colors[i % colors.length],
-        fontSize: `${0.75 + (i % 3) * 0.1}rem`,
-        transform: `rotate(${i % 2 === 0 ? -3 : 3}deg)`,
-      },
-      delay: i * 2.5,
-    }));
-  }, [interactions]);
-
-  if (ghostMessages.length === 0) return null;
-
-  return (
-    <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-      {ghostMessages.map((ghost) => (
-        <FloatingTransmission
-          key={ghost.id}
-          message={ghost.message}
-          style={ghost.style}
-          delay={ghost.delay}
-        />
-      ))}
-    </div>
-  );
-}
-
 function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
   const avatars = useMemo(() => {
     if (interactions.length === 0) return [];
     
-    // Get unique users with their profile images
-    const seenWallets = new Set<string>();
-    const uniqueUsers: { wallet: string; imageUrl?: string }[] = [];
+    const uniqueWallets = Array.from(new Set(interactions.map(i => i.wallet_address))).slice(0, 8);
     
-    for (const interaction of interactions) {
-      if (!seenWallets.has(interaction.wallet_address) && uniqueUsers.length < 8) {
-        seenWallets.add(interaction.wallet_address);
-        uniqueUsers.push({
-          wallet: interaction.wallet_address,
-          imageUrl: (interaction as any).profile_image_url,
-        });
-      }
-    }
-    
-    return uniqueUsers.map((user, i) => ({
-      wallet: user.wallet,
-      imageUrl: user.imageUrl,
+    return uniqueWallets.map((wallet, i) => ({
+      wallet,
       style: {
-        left: AVATAR_POSITIONS[i % AVATAR_POSITIONS.length].left,
-        top: AVATAR_POSITIONS[i % AVATAR_POSITIONS.length].top,
+        left: `${10 + Math.random() * 80}%`,
+        top: `${15 + Math.random() * 70}%`,
       },
-      opacity: 0.18 + (i % 3) * 0.05,
-      scale: 0.7 + (i % 3) * 0.15,
-      delay: i * 3.5,
+      opacity: 0.15 + Math.random() * 0.15,
+      scale: 0.6 + Math.random() * 0.4,
+      delay: i * 4 + Math.random() * 8,
     }));
   }, [interactions]);
 
@@ -150,11 +51,7 @@ function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
             animationDelay: `${avatar.delay}s`,
           }}
         >
-          <Avatar 
-            walletAddress={avatar.wallet} 
-            customImageUrl={avatar.imageUrl}
-            size={48} 
-          />
+          <Avatar walletAddress={avatar.wallet} size={40} />
         </div>
       ))}
     </div>
@@ -251,6 +148,7 @@ export default function Home() {
     }
   }, [isConnected, profileLoading, hasProfile, address, isReady]);
 
+  // Load interactions once on mount - no polling
   useEffect(() => {
     async function loadInteractions() {
       const data = await getAllInteractions();
@@ -258,8 +156,6 @@ export default function Home() {
     }
     
     loadInteractions();
-    const interval = setInterval(loadInteractions, 10000);
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -579,7 +475,6 @@ export default function Home() {
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden relative">
-      <FloatingTransmissions interactions={interactions} />
       <FloatingAvatars interactions={interactions} />
 
       {isInMiniApp && (
@@ -1053,46 +948,25 @@ export default function Home() {
         @keyframes scale-in { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         .animate-scale-in { animation: scale-in 0.3s ease-out; }
         
-        @keyframes float-transmission {
-          0% {
-            opacity: 0;
-            transform: translateY(20px) translateX(0);
-          }
-          10% {
-            opacity: 1;
-          }
-          90% {
-            opacity: 1;
-          }
-          100% {
-            opacity: 0;
-            transform: translateY(-30px) translateX(10px);
-          }
-        }
-        
-        .animate-float-transmission {
-          animation: float-transmission 20s ease-in-out infinite;
-        }
-        
         @keyframes float-avatar {
           0% {
             opacity: 0;
-            transform: translateY(20px) scale(var(--scale, 1));
+            transform: translateY(30px) rotate(-5deg);
           }
           15% {
-            opacity: var(--opacity, 0.2);
+            opacity: 0.25;
           }
           85% {
-            opacity: var(--opacity, 0.2);
+            opacity: 0.25;
           }
           100% {
             opacity: 0;
-            transform: translateY(-30px) scale(var(--scale, 1));
+            transform: translateY(-40px) rotate(5deg);
           }
         }
         
         .animate-float-avatar {
-          animation: float-avatar 25s ease-in-out infinite;
+          animation: float-avatar 30s ease-in-out infinite;
         }
       `}</style>
     </main>
