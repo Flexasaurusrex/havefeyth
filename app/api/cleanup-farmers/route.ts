@@ -85,25 +85,45 @@ export async function GET(request: Request) {
   // DEBUG MODE: Check what OpenRank returns for a specific FID
   const debugFid = searchParams.get('debug');
   if (debugFid) {
-    // Try POST request
-    const response = await fetch(
-      `https://graph.cast.k3l.io/scores/global/engagement/fids`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify([parseInt(debugFid)])
-      }
-    );
-    const data = await response.json();
-    return NextResponse.json({
-      mode: 'DEBUG',
-      fid: debugFid,
-      rawResponse: data,
-      resultLength: data.result?.length,
-      firstEntry: data.result?.[0],
-      rankValue: data.result?.[0]?.rank,
-      rankType: typeof data.result?.[0]?.rank
-    });
+    const fid = parseInt(debugFid);
+    const results: any = { fid };
+    
+    // Try 1: POST with array body
+    try {
+      const res1 = await fetch(
+        `https://graph.cast.k3l.io/scores/global/engagement/fids`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([fid])
+        }
+      );
+      results.post_array = { status: res1.status, data: await res1.json() };
+    } catch (e: any) {
+      results.post_array = { error: e.message };
+    }
+    
+    // Try 2: GET with query param
+    try {
+      const res2 = await fetch(
+        `https://graph.cast.k3l.io/scores/global/engagement/fids?fids=${fid}`
+      );
+      results.get_query = { status: res2.status, data: await res2.json() };
+    } catch (e: any) {
+      results.get_query = { error: e.message };
+    }
+    
+    // Try 3: Different endpoint - scores/personalized
+    try {
+      const res3 = await fetch(
+        `https://graph.cast.k3l.io/scores/personalized/engagement/fids?k=1&limit=1&fid=${fid}`
+      );
+      results.personalized = { status: res3.status, data: await res3.json() };
+    } catch (e: any) {
+      results.personalized = { error: e.message };
+    }
+
+    return NextResponse.json(results);
   }
 
   // MODE: Check profiles WITHOUT Farcaster FID (suspicious wallet-only signups)
