@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import sdk from '@farcaster/frame-sdk';
 
 interface FarcasterUser {
@@ -54,10 +54,19 @@ export function useFarcaster() {
     initFarcaster();
   }, []);
 
+  const openUrl = useCallback(async (url: string) => {
+    if (isInMiniApp) {
+      await sdk.actions.openUrl(url);
+    } else {
+      window.open(url, '_blank', 'width=600,height=400');
+    }
+  }, [isInMiniApp]);
+
   return {
     isInMiniApp,
     isReady,
     user,
     walletAddress: user?.custodyAddress || null,
+    openUrl,
   };
 }
