@@ -40,12 +40,12 @@ function FloatingTransmissions({ interactions }: { interactions: Interaction[] }
     
     return messages.map((interaction, i) => {
       const colors = [
-        'rgba(255, 255, 255, 0.08)',
-        'rgba(200, 200, 200, 0.06)',
-        'rgba(245, 245, 220, 0.07)',
-        'rgba(220, 220, 220, 0.05)',
-        'rgba(255, 250, 240, 0.06)',
-      ];
+         'rgba(255, 255, 255, 0.25)',
+        'rgba(200, 200, 200, 0.22)',
+  'rgba(245, 245, 220, 0.23)',
+  'rgba(220, 220, 220, 0.20)',
+  'rgba(255, 250, 240, 0.22)',
+];
       
       return {
         id: interaction.id,
