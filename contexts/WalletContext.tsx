@@ -3,7 +3,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useFarcaster } from '@/hooks/useFarcaster';
-import { encodeFunctionData } from 'viem';
 
 interface WalletContextType {
   isConnected: boolean;
@@ -34,7 +33,7 @@ const WalletContext = createContext<WalletContextType | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
-  const { writeContractAsync, data: wagmiHash, reset: resetWagmi } = useWriteContract();
+  const { writeContractAsync, data: wagmiHash, reset: resetWagmi, isPending } = useWriteContract();
   const { isLoading: wagmiConfirming, isSuccess: wagmiConfirmed } = useWaitForTransactionReceipt({ 
     hash: wagmiHash 
   });
@@ -44,16 +43,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     isReady: farcasterReady, 
     user: farcasterUser, 
     walletAddress: farcasterAddress,
-    sendTransaction: farcasterSendTx 
   } = useFarcaster();
   
-  const [isPending, setIsPending] = useState(false);
-  const [fcTxHash, setFcTxHash] = useState<string | null>(null);
-  const [fcConfirmed, setFcConfirmed] = useState(false);
-  
-  const isConnected = isInMiniApp ? !!farcasterAddress : wagmiConnected;
-  const address = isInMiniApp ? farcasterAddress : wagmiAddress;
-  const isReady = isInMiniApp ? farcasterReady : true;
+  // Use farcaster address if in mini app and available, otherwise wagmi
+  const isConnected = isInMiniApp ? (!!farcasterAddress || wagmiConnected) : wagmiConnected;
+  const address = isInMiniApp ? (farcasterAddress || wagmiAddress) : wagmiAddress;
+  const isReady = farcasterReady;
   
   const sendContractTransaction = useCallback(async (params: {
     address: `0x${string}`;
@@ -62,58 +57,21 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     args?: any[];
     value?: bigint;
   }): Promise<string | null> => {
-    setIsPending(true);
-    setFcConfirmed(false);
+    // Always use wagmi for transactions
+    const hash = await writeContractAsync({
+      address: params.address,
+      abi: params.abi,
+      functionName: params.functionName,
+      args: params.args || [],
+      value: params.value,
+    });
     
-    try {
-      if (isInMiniApp && farcasterSendTx) {
-        const data = encodeFunctionData({
-          abi: params.abi,
-          functionName: params.functionName,
-          args: params.args || [],
-        });
-        
-        const txHash = await farcasterSendTx({
-          to: params.address,
-          data,
-          value: params.value ? `0x${params.value.toString(16)}` : '0x0',
-        });
-        
-        setFcTxHash(txHash);
-        
-        if (txHash) {
-          setTimeout(() => setFcConfirmed(true), 3000);
-        }
-        
-        return txHash;
-      } else {
-        const hash = await writeContractAsync({
-          address: params.address,
-          abi: params.abi,
-          functionName: params.functionName,
-          args: params.args || [],
-          value: params.value,
-        });
-        
-        return hash;
-      }
-    } catch (error) {
-      console.error('Transaction error:', error);
-      throw error;
-    } finally {
-      setIsPending(false);
-    }
-  }, [isInMiniApp, farcasterSendTx, writeContractAsync]);
+    return hash;
+  }, [writeContractAsync]);
   
   const resetTxState = useCallback(() => {
-    setFcTxHash(null);
-    setFcConfirmed(false);
     resetWagmi?.();
   }, [resetWagmi]);
-  
-  const txHash = isInMiniApp ? fcTxHash : wagmiHash;
-  const isConfirming = isInMiniApp ? (!!fcTxHash && !fcConfirmed) : wagmiConfirming;
-  const isConfirmed = isInMiniApp ? fcConfirmed : wagmiConfirmed;
   
   return (
     <WalletContext.Provider value={{
@@ -129,9 +87,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       } : null,
       sendContractTransaction,
       isPending,
-      isConfirming,
-      isConfirmed,
-      txHash: txHash || null,
+      isConfirming: wagmiConfirming,
+      isConfirmed: wagmiConfirmed,
+      txHash: wagmiHash || null,
       resetTxState,
     }}>
       {children}
