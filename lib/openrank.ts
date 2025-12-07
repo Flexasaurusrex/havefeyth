@@ -36,6 +36,7 @@ export async function checkOpenRank(fid: number): Promise<OpenRankResult> {
     }
     
     const data = await res.json();
+    // Response: { result: [{ fid, username, rank, score, percentile }] }
     const result = data?.result?.[0];
     
     if (!result) {
