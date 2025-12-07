@@ -83,7 +83,7 @@ function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
     if (interactions.length === 0) return [];
     
     // Get unique wallet addresses
-    const uniqueWallets = [...new Set(interactions.map(i => i.wallet_address))].slice(0, 8);
+    const uniqueWallets = Array.from(new Set(interactions.map(i => i.wallet_address))).slice(0, 8);
     
     return uniqueWallets.map((wallet, i) => ({
       wallet,
