@@ -23,7 +23,12 @@ interface Profile {
 async function checkOpenRank(fid: string): Promise<{ eligible: boolean; rank: number; reason: string }> {
   try {
     const response = await fetch(
-      `https://graph.cast.k3l.io/scores/global/engagement/fids?fids=${fid}`
+      `https://graph.cast.k3l.io/scores/global/engagement/fids`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([parseInt(fid)])
+      }
     );
 
     if (!response.ok) {
@@ -80,8 +85,14 @@ export async function GET(request: Request) {
   // DEBUG MODE: Check what OpenRank returns for a specific FID
   const debugFid = searchParams.get('debug');
   if (debugFid) {
+    // Try POST request
     const response = await fetch(
-      `https://graph.cast.k3l.io/scores/global/engagement/fids?fids=${debugFid}`
+      `https://graph.cast.k3l.io/scores/global/engagement/fids`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify([parseInt(debugFid)])
+      }
     );
     const data = await response.json();
     return NextResponse.json({
