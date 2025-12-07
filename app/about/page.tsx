@@ -307,7 +307,7 @@ export default function AboutPage() {
                 <p className="text-sm text-gray-400">
                   Share your Feylon publicly on Farcaster. Your truth enters both the Feylon stream and the broader social layer. Claim on-chain token rewards instantly.
                 </p>
-                <div className="text-xs text-purple-400">10 points • 4-hour cooldown</div>
+                <div className="text-xs text-purple-400">10 points • 24-hour cooldown</div>
               </div>
 
               <div className="bg-gradient-to-br from-pink-900/30 to-black border border-pink-500/30 rounded-xl p-6 space-y-4">
