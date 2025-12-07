@@ -67,7 +67,7 @@ export async function GET(request: Request) {
   const dryRun = searchParams.get('dry') === 'true';
   const checkNoFid = searchParams.get('nofid') === 'true'; // Check profiles WITHOUT farcaster
   const batchStart = parseInt(searchParams.get('start') || '0');
-  const batchSize = 50; // Process 50 at a time to avoid timeout
+  const batchSize = 100; // Process 100 at a time
 
   // Simple auth check
   if (secret !== SECRET) {
