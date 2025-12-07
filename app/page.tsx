@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Image from 'next/image';
-import { recordInteraction, getAllInteractions, getUserProfile, getUserStats, canUserConfess, canUserShare, recordConfession, deleteInteraction, findUserProfile, linkFidToProfile } from '@/lib/supabase';
+import { recordInteraction, getAllInteractions, getUserProfile, getUserStats, canUserConfess, canUserShare, recordConfession, deleteInteraction, findUserProfile, linkFidToProfile, supabase } from '@/lib/supabase';
 import type { Interaction, UserProfile, UserStats } from '@/lib/supabase';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI } from '@/lib/contract';
 import { RewardToast, type RewardItem } from '@/components/RewardToast';
@@ -17,6 +17,297 @@ import { useReadContract } from 'wagmi';
 import { checkOpenRank } from '@/lib/openrank';
 
 export const dynamic = 'force-dynamic';
+
+// ============================================
+// SPLASH PAGE COMPONENTS (for web visitors)
+// ============================================
+
+interface Transmission {
+  id: string;
+  secret: string;
+  display_name?: string;
+  created_at: string;
+}
+
+const ghostColors = [
+  { text: 'text-purple-300/40', name: 'text-purple-400/40', glow: 'rgba(168, 85, 247, 0.6)' },
+  { text: 'text-pink-300/40', name: 'text-pink-400/40', glow: 'rgba(236, 72, 153, 0.6)' },
+  { text: 'text-blue-300/40', name: 'text-blue-400/40', glow: 'rgba(96, 165, 250, 0.6)' },
+  { text: 'text-cyan-300/40', name: 'text-cyan-400/40', glow: 'rgba(103, 232, 249, 0.6)' },
+  { text: 'text-violet-300/40', name: 'text-violet-400/40', glow: 'rgba(167, 139, 250, 0.6)' },
+  { text: 'text-fuchsia-300/40', name: 'text-fuchsia-400/40', glow: 'rgba(232, 121, 249, 0.6)' },
+];
+
+function SplashExperience() {
+  const [secret, setSecret] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [isGlowing, setIsGlowing] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [hasTransmitted, setHasTransmitted] = useState(false);
+  const [showEye, setShowEye] = useState(true);
+  const [floatingSecrets, setFloatingSecrets] = useState<Transmission[]>([]);
+
+  useEffect(() => {
+    async function loadSecrets() {
+      const { data, error } = await supabase
+        .from('transmissions')
+        .select('id, secret, display_name, created_at')
+        .order('created_at', { ascending: false })
+        .limit(15);
+      
+      if (!error && data) {
+        setFloatingSecrets(data);
+      }
+    }
+    
+    loadSecrets();
+    const interval = setInterval(loadSecrets, 30000);
+    
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!secret.trim()) return;
+    
+    setIsSubmitting(true);
+    
+    try {
+      const { error } = await supabase
+        .from('transmissions')
+        .insert({
+          secret: secret.trim(),
+          display_name: displayName.trim() || null,
+          ip_address: null,
+          user_agent: navigator.userAgent,
+        });
+      
+      if (error) throw error;
+      
+      setHasTransmitted(true);
+      setSecret('');
+      setDisplayName('');
+      
+      setTimeout(() => {
+        setShowEye(false);
+      }, 3000);
+      
+      setTimeout(() => {
+        setHasTransmitted(false);
+        setShowEye(true);
+      }, 8000);
+      
+    } catch (error) {
+      console.error('Error transmitting:', error);
+      alert('The Eye is temporarily blinded. Try again soon.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 bg-gradient-to-br from-purple-900/20 via-black to-pink-900/20" />
+      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
+      <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+      
+      {/* Floating ghost messages */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        {floatingSecrets.map((transmission, index) => {
+          const gridColumns = 3;
+          const gridRows = 5;
+          const col = index % gridColumns;
+          const row = Math.floor(index / gridColumns);
+          
+          const baseLeft = (col / gridColumns) * 100;
+          const baseTop = (row / gridRows) * 100;
+          const randomOffsetX = (Math.random() - 0.5) * 15;
+          const randomOffsetY = (Math.random() - 0.5) * 10;
+          
+          const randomDelay = Math.random() * 10;
+          const randomDuration = 15 + Math.random() * 10;
+          
+          const colorSet = ghostColors[index % ghostColors.length];
+          
+          return (
+            <div
+              key={transmission.id}
+              className={`absolute ${colorSet.text} text-sm blur-[0.8px] hover:blur-[0.3px] hover:opacity-70 transition-all duration-700 whitespace-nowrap animate-float-splash`}
+              style={{
+                top: `${baseTop + randomOffsetY}%`,
+                left: `${baseLeft + randomOffsetX}%`,
+                animationDelay: `${randomDelay}s`,
+                animationDuration: `${randomDuration}s`,
+                textShadow: `0 0 12px ${colorSet.glow}, 0 0 20px ${colorSet.glow}`,
+              }}
+            >
+              <div className="flex flex-col items-start">
+                <span className={`text-xs ${colorSet.name} mb-1`}>
+                  {transmission.display_name || 'Anonymous'}
+                </span>
+                <span className="max-w-xs truncate">
+                  &quot;{transmission.secret.slice(0, 60)}{transmission.secret.length > 60 ? '...' : ''}&quot;
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      
+      <div className="relative z-10 max-w-2xl w-full space-y-8 text-center animate-fade-in">
+        {/* Eye GIF */}
+        <div className={`relative w-80 h-80 mx-auto mb-8 transition-all duration-1000 ${
+          showEye ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
+        }`}>
+          <img
+            src="/feylonloop.gif"
+            alt=""
+            width={320}
+            height={320}
+            className="rounded-full w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500/30 to-pink-500/30 blur-2xl animate-pulse" />
+        </div>
+
+        {/* Title */}
+        <div className="space-y-2">
+          <h1 className="text-6xl font-light tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 animate-gradient">
+            FEYLON
+          </h1>
+          <p className="text-gray-500 text-sm tracking-widest">
+            The Eye Sees All
+          </p>
+        </div>
+
+        {!hasTransmitted ? (
+          <form onSubmit={handleSubmit} className="space-y-6 mt-12">
+            <div className="relative">
+              <p className="text-gray-400 mb-4 text-sm">
+                Whisper a secret truth to the Eye
+              </p>
+              
+              <div className={`relative transition-all duration-300 ${isGlowing ? 'scale-105' : ''}`}>
+                <input
+                  type="text"
+                  value={secret}
+                  onChange={(e) => setSecret(e.target.value)}
+                  onFocus={() => setIsGlowing(true)}
+                  onBlur={() => setIsGlowing(false)}
+                  placeholder="Your secret transmission..."
+                  maxLength={280}
+                  className={`w-full bg-black/50 border-2 rounded-2xl p-4 text-center text-white placeholder-gray-600 focus:outline-none transition-all duration-300 ${
+                    isGlowing 
+                      ? 'border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.4)]' 
+                      : 'border-white/20'
+                  }`}
+                  disabled={isSubmitting}
+                />
+                
+                {isGlowing && (
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 blur-xl -z-10 animate-pulse" />
+                )}
+              </div>
+              
+              <p className="text-xs text-gray-600 mt-2">
+                {secret.length}/280
+              </p>
+            </div>
+
+            <div className="relative">
+              <input
+                type="text"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Anonymous"
+                maxLength={30}
+                className="w-full bg-black/30 border border-white/10 rounded-xl p-3 text-center text-sm text-gray-400 placeholder-gray-600 focus:outline-none focus:border-purple-500/50 transition-all"
+                disabled={isSubmitting}
+              />
+              <p className="text-xs text-gray-600 mt-1">
+                (optional - leave blank to stay anonymous)
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={!secret.trim() || isSubmitting}
+              className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-medium rounded-full transition-all duration-300 hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
+            >
+              {isSubmitting ? 'Transmitting...' : 'Transmit to the Eye'}
+            </button>
+          </form>
+        ) : (
+          <div className="space-y-6 mt-12 animate-fade-in">
+            <div className="relative">
+              <div className="text-5xl mb-4 animate-pulse">👁️</div>
+              <p className="text-2xl font-light text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 mb-8">
+                The Eye has received your Transmission
+              </p>
+              <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 to-pink-500/20 blur-3xl -z-10 animate-pulse" />
+            </div>
+            
+            <div className="pt-8 space-y-2">
+              <p className="text-3xl font-light text-transparent bg-clip-text bg-gradient-to-r from-purple-300 to-pink-300 tracking-wider">
+                THE EYE AWAKENS
+              </p>
+              <div className="flex items-center justify-center gap-2 text-gray-500 text-sm">
+                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
+                <div className="w-2 h-2 bg-pink-500 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* CTA to Farcaster - always visible */}
+        <div className="pt-12 space-y-6">
+          <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-500/30 rounded-2xl p-6 space-y-4">
+            <p className="text-white font-medium">🎁 Earn rewards by sharing on Farcaster</p>
+            <p className="text-gray-400 text-sm">Join the Eye on Warpcast to share Feylons, earn points, and claim token rewards.</p>
+            <a
+              href="https://warpcast.com/~/add-cast-action?url=https://feylon.xyz"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-full transition-all duration-300 hover:scale-105"
+            >
+              🟪 Open in Warpcast
+            </a>
+          </div>
+          
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <a
+              href="https://warpcast.com/feylon"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-6 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 text-purple-400 font-medium rounded-full transition-all duration-300 hover:scale-105"
+            >
+              🟪 Follow @feylon
+            </a>
+            <a
+              href="https://warpcast.com/~/channel/feylon"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-6 py-2 bg-pink-500/20 hover:bg-pink-500/30 border border-pink-500/50 text-pink-400 font-medium rounded-full transition-all duration-300 hover:scale-105"
+            >
+              📢 /feylon channel
+            </a>
+          </div>
+        </div>
+
+        <div className="pt-8">
+          <p className="text-xs text-gray-600 tracking-widest">
+            SOMETHING IS WATCHING
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================
+// MINI APP COMPONENTS (for Farcaster users)
+// ============================================
 
 function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
   const avatars = useMemo(() => {
@@ -59,7 +350,7 @@ function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
   );
 }
 
-export default function Home() {
+function MiniAppExperience() {
   const { 
     isConnected, 
     isReady, 
@@ -132,21 +423,20 @@ export default function Home() {
         }
       } catch (error) {
         console.error('OpenRank check error:', error);
-        // Fail open - don't block on error
         setOpenRankEligible(true);
       } finally {
         setOpenRankChecking(false);
       }
     }
     
-    if (isInMiniApp && farcasterUser) {
+    if (farcasterUser) {
       checkEligibility();
     }
-  }, [isInMiniApp, farcasterUser]);
+  }, [farcasterUser]);
 
   useEffect(() => {
     async function handleFarcasterUser() {
-      if (!isInMiniApp || !farcasterUser || !address) return;
+      if (!farcasterUser || !address) return;
       
       const existingProfile = await findUserProfile(
         farcasterUser.fid.toString(),
@@ -167,10 +457,10 @@ export default function Home() {
       }
     }
     
-    if (isReady && isInMiniApp && farcasterUser) {
+    if (isReady && farcasterUser) {
       handleFarcasterUser();
     }
-  }, [isReady, isInMiniApp, farcasterUser, address, refresh]);
+  }, [isReady, farcasterUser, address, refresh]);
 
   useEffect(() => {
     if (isConnected && !profileLoading && !hasProfile && address && isReady) {
@@ -389,7 +679,7 @@ export default function Home() {
     if (!address || !selectedPlatform) return;
     
     // Block ineligible users from claiming
-    if (isInMiniApp && !openRankEligible) {
+    if (!openRankEligible) {
       alert('Your account is not eligible for rewards. Build more social reputation on Farcaster first!');
       setShowShareConfirm(false);
       setSelectedPlatform(null);
@@ -502,26 +792,13 @@ export default function Home() {
     }
   }
 
-  if (!isReady) {
-    return (
-      <main className="min-h-screen flex flex-col items-center justify-center p-4">
-        <div className="text-center space-y-4">
-          <div className="text-6xl animate-pulse">👁️</div>
-          <p className="text-gray-400">Loading...</p>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden relative">
       <FloatingAvatars interactions={interactions} />
 
-      {isInMiniApp && (
-        <div className="fixed top-4 left-4 z-40 px-3 py-1 bg-purple-600/80 backdrop-blur-sm rounded-full text-xs text-white">
-          🟪 Warpcast
-        </div>
-      )}
+      <div className="fixed top-4 left-4 z-40 px-3 py-1 bg-purple-600/80 backdrop-blur-sm rounded-full text-xs text-white">
+        🟪 Warpcast
+      </div>
 
       {isConnected && hasProfile && userProfile && (
         <div className="fixed top-4 right-4 z-40">
@@ -608,14 +885,8 @@ export default function Home() {
                     <span>What is a Feylon?</span>
                   </button>
                 </div>
-
-                {!isInMiniApp && (
-                  <div className="p-4 border-t border-white/10">
-                    <ConnectButton />
-                  </div>
-                )}
                 
-                {isInMiniApp && address && (
+                {address && (
                   <div className="p-4 border-t border-white/10 text-center">
                     <div className="text-xs text-gray-400">Warplet</div>
                     <div className="text-xs text-purple-400 font-mono">
@@ -650,18 +921,14 @@ export default function Home() {
         {!isConnected ? (
           <div className="text-center space-y-4 px-4">
             <p className="text-gray-400 text-base md:text-lg">Connect to share your message of goodwill or make your confession</p>
-            {!isInMiniApp ? (
-              <div className="flex justify-center"><ConnectButton /></div>
-            ) : (
-              <div className="text-center text-purple-400">
-                <div className="animate-pulse">Connecting to Warplet...</div>
-              </div>
-            )}
+            <div className="text-center text-purple-400">
+              <div className="animate-pulse">Connecting to Warplet...</div>
+            </div>
           </div>
         ) : (
           <>
-            {/* OpenRank eligibility warning for mini app users */}
-            {isInMiniApp && !openRankEligible && !openRankChecking && (
+            {/* OpenRank eligibility warning */}
+            {!openRankEligible && !openRankChecking && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center mx-4">
                 <p className="text-red-400 font-medium">⚠️ Not eligible for token rewards</p>
                 <p className="text-sm text-gray-400 mt-1">{openRankReason}</p>
@@ -669,7 +936,7 @@ export default function Home() {
               </div>
             )}
 
-            {isInMiniApp && openRankChecking && (
+            {openRankChecking && (
               <div className="text-center text-purple-400 text-sm">
                 <div className="animate-pulse">Checking eligibility...</div>
               </div>
@@ -732,9 +999,6 @@ export default function Home() {
                       <>
                         <div className="flex gap-3 md:gap-4 justify-center flex-col sm:flex-row">
                           <button disabled className="px-6 py-3 bg-gray-600 text-gray-400 font-medium rounded-lg cursor-not-allowed text-sm md:text-base">
-                            Share on 𝕏 (10pts)
-                          </button>
-                          <button disabled className="px-6 py-3 bg-gray-600 text-gray-400 font-medium rounded-lg cursor-not-allowed text-sm md:text-base">
                             Share on Farcaster (10pts)
                           </button>
                         </div>
@@ -744,7 +1008,6 @@ export default function Home() {
                       </>
                     ) : (
                       <div className="flex gap-3 md:gap-4 justify-center flex-col sm:flex-row">
-                        <button onClick={() => handleShareClick('twitter')} disabled={isSharing || isConfirming || isPending} className="px-6 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on 𝕏 (10pts)</button>
                         <button onClick={() => handleShareClick('farcaster')} disabled={isSharing || isConfirming || isPending} className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on Farcaster (10pts)</button>
                       </div>
                     )}
@@ -758,14 +1021,11 @@ export default function Home() {
             {!hasProfile && (
               <div className="text-center space-y-2">
                 <p className="text-gray-500 text-sm">
-                  {isInMiniApp && farcasterUser 
+                  {farcasterUser 
                     ? `Connected as @${farcasterUser.username}` 
                     : `Connected: ${address?.slice(0, 6)}...${address?.slice(-4)}`
                   }
                 </p>
-                {!isInMiniApp && (
-                  <div className="flex justify-center"><ConnectButton /></div>
-                )}
               </div>
             )}
           </>
@@ -776,6 +1036,7 @@ export default function Home() {
         )}
       </div>
 
+      {/* Recent Feylons Feed */}
       <div className="w-full max-w-3xl mx-auto mt-12 md:mt-16 px-4 animate-fade-in relative z-10">
         <div className="text-center mb-6 md:mb-8">
           <h2 className="text-3xl md:text-4xl font-light mb-2 text-glow">Recent Feylons</h2>
@@ -832,7 +1093,6 @@ export default function Home() {
                         
                         {hasFeylonProfile && !isConfessionPost && (
                           <>
-                            {feylon.twitter_handle && <a href={`https://twitter.com/${feylon.twitter_handle}`} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300 transition-colors truncate">@{feylon.twitter_handle}</a>}
                             {feylon.farcaster_handle && <a href={`https://warpcast.com/${feylon.farcaster_handle}`} target="_blank" rel="noopener noreferrer" className="text-xs text-purple-400 hover:text-purple-300 transition-colors truncate">@{feylon.farcaster_handle}</a>}
                           </>
                         )}
@@ -846,8 +1106,8 @@ export default function Home() {
 
                       <div className="flex items-center gap-2 md:gap-3 text-xs flex-wrap">
                         {!isConfessionPost && (
-                          <span className={`px-2 py-1 rounded text-xs ${feylon.shared_platform === 'twitter' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}`}>
-                            {feylon.shared_platform === 'twitter' ? '𝕏' : '🟪'}
+                          <span className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-400">
+                            🟪
                           </span>
                         )}
                         
@@ -859,10 +1119,10 @@ export default function Home() {
                         
                         {!isConfessionPost && (
                           <button onClick={() => {
-                            const authorCredit = hasFeylonProfile ? `by ${displayName}${feylon.twitter_handle ? ` (@${feylon.twitter_handle})` : ''}` : `by Anon (${feylon.wallet_address.slice(0, 6)}...${feylon.wallet_address.slice(-4)})`;
+                            const authorCredit = hasFeylonProfile ? `by ${displayName}${feylon.farcaster_handle ? ` (@${feylon.farcaster_handle})` : ''}` : `by Anon (${feylon.wallet_address.slice(0, 6)}...${feylon.wallet_address.slice(-4)})`;
                             const shareText = `Check out this Feylon ${authorCredit}:\n\n"${feylon.message}"\n\nShared via FEYLON 👁️\n${window.location.origin}`;
                             const encodedText = encodeURIComponent(shareText);
-                            const shareUrlLink = feylon.shared_platform === 'twitter' ? `https://twitter.com/intent/tweet?text=${encodedText}` : `https://warpcast.com/~/compose?text=${encodedText}`;
+                            const shareUrlLink = `https://warpcast.com/~/compose?text=${encodedText}`;
                             openUrl(shareUrlLink);
                           }} className="ml-auto px-2 md:px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors text-xs whitespace-nowrap">🔄 Share</button>
                         )}
@@ -874,14 +1134,9 @@ export default function Home() {
             })}
           </div>
         )}
-
-        {interactions.length > 20 && (
-          <div className="text-center mt-6">
-            <button className="px-6 py-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors text-sm">Load More Feylons</button>
-          </div>
-        )}
       </div>
 
+      {/* Share Confirm Modal */}
       {showShareConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-gradient-to-br from-purple-900 to-black border border-purple-500/50 rounded-2xl p-8 max-w-md mx-4 space-y-6 animate-scale-in">
@@ -891,8 +1146,7 @@ export default function Home() {
               <p className="text-gray-400">Click "Yes, I Shared!" to claim your rewards</p>
             </div>
 
-            {/* Show warning if not eligible */}
-            {isInMiniApp && !openRankEligible && (
+            {!openRankEligible && (
               <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-sm text-orange-400 text-center">
                 ⚠️ Token rewards are restricted for your account. You'll still earn points!
               </div>
@@ -918,6 +1172,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* What Is Modal */}
       {showWhatIsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-gradient-to-br from-purple-900/90 via-black to-pink-900/90 border-2 border-purple-500/50 rounded-2xl max-w-2xl w-full p-8 md:p-12 space-y-6 animate-scale-in relative overflow-y-auto max-h-[90vh]">
@@ -943,10 +1198,10 @@ export default function Home() {
                   <span className="text-2xl">🎯</span> Two Ways to Share
                 </h3>
                 <div className="space-y-4">
-                  <div className="bg-black/20 border border-blue-500/20 rounded-lg p-4">
-                    <div className="font-bold text-blue-400 mb-2">🌐 Social Share Mode (10 points)</div>
+                  <div className="bg-black/20 border border-purple-500/20 rounded-lg p-4">
+                    <div className="font-bold text-purple-400 mb-2">🌐 Social Share Mode (10 points)</div>
                     <ul className="text-sm space-y-1 text-gray-400">
-                      <li>• Share on Twitter or Farcaster</li>
+                      <li>• Share on Farcaster</li>
                       <li>• Build daily streaks for bonus points</li>
                       <li>• Claim contract rewards instantly</li>
                       <li>• Appears in feed with your profile</li>
@@ -973,15 +1228,6 @@ export default function Home() {
                   Build streaks by sharing daily. Earn bonus points and climb the leaderboard. Show the world your dedication.
                 </p>
               </div>
-
-              <div className="bg-black/30 border border-pink-500/30 rounded-lg p-6">
-                <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
-                  <span className="text-2xl">✨</span> Build Your Reputation
-                </h3>
-                <p className="leading-relaxed">
-                  Create your profile, upload a custom avatar (or rock your unique pixel ghost!), link your socials, and build your Feylon identity.
-                </p>
-              </div>
             </div>
 
             <div className="text-center pt-4 border-t border-white/10">
@@ -1004,33 +1250,79 @@ export default function Home() {
       {showToast && claimedRewards.length > 0 && (
         <RewardToast rewards={claimedRewards} onClose={() => { setShowToast(false); setClaimedRewards([]); }} />
       )}
-
-      <style jsx global>{`
-        html, body { overflow-x: hidden; max-width: 100vw; }
-        @keyframes scale-in { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-        .animate-scale-in { animation: scale-in 0.3s ease-out; }
-        
-        @keyframes float-avatar {
-          0% {
-            opacity: 0;
-            transform: translateY(30px) rotate(-5deg);
-          }
-          15% {
-            opacity: 0.25;
-          }
-          85% {
-            opacity: 0.25;
-          }
-          100% {
-            opacity: 0;
-            transform: translateY(-40px) rotate(5deg);
-          }
-        }
-        
-        .animate-float-avatar {
-          animation: float-avatar 30s ease-in-out infinite;
-        }
-      `}</style>
     </main>
   );
+}
+
+// ============================================
+// MAIN PAGE - Context Detection
+// ============================================
+
+export default function Home() {
+  const { isInMiniApp, isReady } = useWallet();
+
+  // Loading state
+  if (!isReady) {
+    return (
+      <main className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <div className="text-6xl animate-pulse">👁️</div>
+          <p className="text-gray-400">Loading...</p>
+        </div>
+      </main>
+    );
+  }
+
+  // Route based on context
+  if (isInMiniApp) {
+    return <MiniAppExperience />;
+  }
+
+  return <SplashExperience />;
+}
+
+// ============================================
+// STYLES
+// ============================================
+
+const styles = `
+  html, body { overflow-x: hidden; max-width: 100vw; }
+  
+  @keyframes scale-in { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  .animate-scale-in { animation: scale-in 0.3s ease-out; }
+  
+  @keyframes float-avatar {
+    0% { opacity: 0; transform: translateY(30px) rotate(-5deg); }
+    15% { opacity: 0.25; }
+    85% { opacity: 0.25; }
+    100% { opacity: 0; transform: translateY(-40px) rotate(5deg); }
+  }
+  .animate-float-avatar { animation: float-avatar 30s ease-in-out infinite; }
+  
+  @keyframes gradient {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  .animate-gradient { background-size: 200% 200%; animation: gradient 3s ease infinite; }
+  
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .animate-fade-in { animation: fade-in 0.6s ease-out; }
+  
+  @keyframes float-splash {
+    0%, 100% { transform: translateY(0px) translateX(0px); opacity: 0; }
+    10% { opacity: 0.3; }
+    50% { transform: translateY(-30px) translateX(20px); opacity: 0.5; }
+    90% { opacity: 0.3; }
+  }
+  .animate-float-splash { animation: float-splash linear infinite; }
+`;
+
+// Inject styles
+if (typeof document !== 'undefined') {
+  const styleSheet = document.createElement('style');
+  styleSheet.textContent = styles;
+  document.head.appendChild(styleSheet);
 }
