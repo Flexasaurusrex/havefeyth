@@ -45,8 +45,10 @@ export interface UserProfile {
   display_name: string;
   twitter_handle?: string;
   farcaster_handle?: string;
+  farcaster_fid?: string;
   profile_image_url?: string;
   bio?: string;
+  claim_wallet?: string;
   created_at: string;
   updated_at: string;
 }
@@ -160,7 +162,6 @@ export async function recordInteraction(
   }
 
   try {
-    // Check cooldown before insert to prevent race conditions
     const { canShare, nextAvailable } = await canUserShare(walletAddress);
     if (!canShare) {
       return { 
@@ -206,8 +207,6 @@ export async function canUserConfess(walletAddress: string): Promise<{ canConfes
   }
 
   try {
-    // Check interactions table directly - source of truth
-    // This prevents race conditions from checking user_stats which updates AFTER insert
     const { data: recentConfession, error } = await supabase
       .from('interactions')
       .select('created_at')
@@ -219,7 +218,6 @@ export async function canUserConfess(walletAddress: string): Promise<{ canConfes
 
     if (error) throw error;
     
-    // No previous confessions
     if (!recentConfession) {
       return { canConfess: true };
     }
@@ -228,7 +226,6 @@ export async function canUserConfess(walletAddress: string): Promise<{ canConfes
     const now = new Date();
     const hoursSinceLastConfession = (now.getTime() - lastConfession.getTime()) / (1000 * 60 * 60);
     
-    // 3 days = 72 hours
     if (hoursSinceLastConfession >= 72) {
       return { canConfess: true };
     }
@@ -239,7 +236,6 @@ export async function canUserConfess(walletAddress: string): Promise<{ canConfes
     return { canConfess: false, nextAvailable };
   } catch (error) {
     console.error('Error checking confession cooldown:', error);
-    // Fail closed - if we can't verify, don't allow
     return { canConfess: false };
   }
 }
@@ -250,8 +246,6 @@ export async function canUserShare(walletAddress: string): Promise<{ canShare: b
   }
 
   try {
-    // Check interactions table directly - source of truth
-    // Only check non-confession shares
     const { data: recentShare, error } = await supabase
       .from('interactions')
       .select('created_at')
@@ -263,7 +257,6 @@ export async function canUserShare(walletAddress: string): Promise<{ canShare: b
 
     if (error) throw error;
     
-    // No previous shares
     if (!recentShare) {
       return { canShare: true };
     }
@@ -272,7 +265,6 @@ export async function canUserShare(walletAddress: string): Promise<{ canShare: b
     const now = new Date();
     const hoursSinceLastShare = (now.getTime() - lastShare.getTime()) / (1000 * 60 * 60);
     
-    // 24 hours cooldown
     if (hoursSinceLastShare >= 24) {
       return { canShare: true };
     }
@@ -283,7 +275,6 @@ export async function canUserShare(walletAddress: string): Promise<{ canShare: b
     return { canShare: false, nextAvailable };
   } catch (error) {
     console.error('Error checking share cooldown:', error);
-    // Fail closed - if we can't verify, don't allow
     return { canShare: false };
   }
 }
@@ -298,7 +289,6 @@ export async function recordConfession(
   }
 
   try {
-    // Double-check cooldown right before insert to minimize race window
     const { canConfess, nextAvailable } = await canUserConfess(walletAddress);
     if (!canConfess) {
       return { 
@@ -348,7 +338,6 @@ export async function deleteInteraction(interactionId: string, adminAddress: str
   }
 
   try {
-    // Verify admin
     const expectedAdmin = process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
     if (!expectedAdmin || adminAddress.toLowerCase() !== expectedAdmin) {
       return { success: false, error: 'Unauthorized' };
@@ -403,7 +392,6 @@ export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEn
   if (!isConfigured()) return [];
 
   try {
-    // First get user stats
     const { data: stats, error: statsError } = await supabase
       .from('user_stats')
       .select('*')
@@ -413,21 +401,17 @@ export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEn
     if (statsError) throw statsError;
     if (!stats || stats.length === 0) return [];
 
-    // Get all wallet addresses
     const walletAddresses = stats.map(s => s.wallet_address);
 
-    // Fetch profiles for these wallets
     const { data: profiles } = await supabase
       .from('user_profiles')
       .select('wallet_address, display_name, twitter_handle, farcaster_handle, profile_image_url')
       .in('wallet_address', walletAddresses);
 
-    // Create a map for quick lookup
     const profileMap = new Map(
       (profiles || []).map(p => [p.wallet_address, p])
     );
 
-    // Merge stats with profiles
     return stats.map((entry: any) => {
       const profile = profileMap.get(entry.wallet_address);
       return {
@@ -592,6 +576,7 @@ export async function createUserProfile(profile: {
   display_name: string;
   twitter_handle?: string;
   farcaster_handle?: string;
+  farcaster_fid?: string;
   profile_image_url?: string;
   bio?: string;
 }): Promise<void> {
@@ -608,6 +593,7 @@ export async function createUserProfile(profile: {
           display_name: profile.display_name,
           twitter_handle: profile.twitter_handle,
           farcaster_handle: profile.farcaster_handle,
+          farcaster_fid: profile.farcaster_fid,
           profile_image_url: profile.profile_image_url,
           bio: profile.bio,
         },
@@ -631,8 +617,10 @@ export async function updateUserProfile(
     display_name?: string;
     twitter_handle?: string;
     farcaster_handle?: string;
+    farcaster_fid?: string;
     profile_image_url?: string;
     bio?: string;
+    claim_wallet?: string;
   }
 ): Promise<void> {
   if (!isConfigured()) {
@@ -673,6 +661,56 @@ export async function hasUserProfile(walletAddress: string): Promise<boolean> {
   } catch (error) {
     console.error('Error checking user profile:', error);
     return false;
+  }
+}
+
+export async function findUserProfile(
+  fid?: string,
+  farcasterHandle?: string,
+  walletAddress?: string
+): Promise<UserProfile | null> {
+  if (!isConfigured()) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('find_user_profile', {
+      p_fid: fid || null,
+      p_farcaster_handle: farcasterHandle || null,
+      p_wallet_address: walletAddress?.toLowerCase() || null,
+    });
+
+    if (error) throw error;
+    
+    if (data && data.length > 0) {
+      return data[0] as UserProfile;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error finding user profile:', error);
+    return null;
+  }
+}
+
+export async function linkFidToProfile(
+  fid: string,
+  farcasterHandle: string,
+  walletAddress: string
+): Promise<string | null> {
+  if (!isConfigured()) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('link_fid_to_profile', {
+      p_fid: fid,
+      p_farcaster_handle: farcasterHandle,
+      p_wallet_address: walletAddress.toLowerCase(),
+    });
+
+    if (error) throw error;
+    
+    return data;
+  } catch (error) {
+    console.error('Error linking FID to profile:', error);
+    return null;
   }
 }
 
