@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Image from 'next/image';
-import { recordInteraction, getAllInteractions, getUserProfile, getUserStats, canUserConfess, recordConfession, deleteInteraction } from '@/lib/supabase';
+import { recordInteraction, getAllInteractions, getUserProfile, getUserStats, canUserConfess, canUserShare, recordConfession, deleteInteraction } from '@/lib/supabase';
 import type { Interaction, UserProfile, UserStats } from '@/lib/supabase';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI } from '@/lib/contract';
 import { RewardToast, type RewardItem } from '@/components/RewardToast';
@@ -44,6 +44,11 @@ export default function Home() {
   const [canConfess, setCanConfess] = useState(true);
   const [nextConfessionDate, setNextConfessionDate] = useState<Date | null>(null);
   const [confessionCooldown, setConfessionCooldown] = useState('');
+
+  // Share cooldown state
+  const [canShareState, setCanShareState] = useState(true);
+  const [nextShareDate, setNextShareDate] = useState<Date | null>(null);
+  const [shareCooldown, setShareCooldown] = useState('');
 
   const isAdmin = address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
 
@@ -121,6 +126,24 @@ export default function Home() {
     }
   }, [address, isConnected, hasProfile]);
 
+  // Check share cooldown
+  useEffect(() => {
+    async function checkShare() {
+      if (!address) return;
+      
+      const result = await canUserShare(address);
+      setCanShareState(result.canShare);
+      
+      if (!result.canShare && result.nextAvailable) {
+        setNextShareDate(result.nextAvailable);
+      }
+    }
+    
+    if (isConnected && hasProfile) {
+      checkShare();
+    }
+  }, [address, isConnected, hasProfile]);
+
   useEffect(() => {
     if (!nextConfessionDate || canConfess) {
       setConfessionCooldown('');
@@ -156,6 +179,35 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [nextConfessionDate, canConfess]);
 
+  // Share cooldown timer
+  useEffect(() => {
+    if (!nextShareDate || canShareState) {
+      setShareCooldown('');
+      return;
+    }
+
+    const updateTimer = () => {
+      const now = new Date();
+      const diff = nextShareDate.getTime() - now.getTime();
+      
+      if (diff <= 0) {
+        setCanShareState(true);
+        setShareCooldown('');
+        setNextShareDate(null);
+        return;
+      }
+      
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      
+      setShareCooldown(hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`);
+    };
+    
+    updateTimer();
+    const interval = setInterval(updateTimer, 60000);
+    return () => clearInterval(interval);
+  }, [nextShareDate, canShareState]);
+
   useEffect(() => {
     if (isConfirmed && claimedRewards.length > 0) {
       setShowToast(true);
@@ -172,6 +224,12 @@ export default function Home() {
   function handleShareClick(platform: 'twitter' | 'farcaster') {
     if (!isConnected || !address || !message.trim()) return;
     
+    // Check cooldown before opening share dialog
+    if (!canShareState) {
+      alert(`Please wait! Next share available in ${shareCooldown}`);
+      return;
+    }
+    
     setSelectedPlatform(platform);
     setPendingMessage(message);
 
@@ -187,6 +245,12 @@ export default function Home() {
 
   async function handleConfession() {
     if (!address || !message.trim()) return;
+    
+    // Don't trust button state alone
+    if (!canConfess) {
+      alert('Please wait for the cooldown period to end');
+      return;
+    }
     
     setIsSharing(true);
 
@@ -233,7 +297,7 @@ export default function Home() {
     setShowShareConfirm(false);
 
     try {
-      await recordInteraction(
+      const interactionResult = await recordInteraction(
         address, 
         pendingMessage, 
         selectedPlatform, 
@@ -242,6 +306,14 @@ export default function Home() {
         userProfile?.twitter_handle,
         userProfile?.farcaster_handle
       );
+      
+      // Check if cooldown blocked it
+      if (!interactionResult.success) {
+        alert(interactionResult.error || 'You must wait before sharing again!');
+        setIsSharing(false);
+        setSelectedPlatform(null);
+        return;
+      }
       
       const result = await writeContractAsync({
         address: CONTRACT_ADDRESS,
@@ -267,12 +339,17 @@ export default function Home() {
       setIsGlowing(false);
       
       if (address) {
-        const [stats, newInteractions] = await Promise.all([
+        const [stats, newInteractions, shareCheck] = await Promise.all([
           getUserStats(address),
-          getAllInteractions()
+          getAllInteractions(),
+          canUserShare(address)
         ]);
         setUserStats(stats);
         setInteractions(newInteractions);
+        setCanShareState(shareCheck.canShare);
+        if (!shareCheck.canShare && shareCheck.nextAvailable) {
+          setNextShareDate(shareCheck.nextAvailable);
+        }
       }
     } catch (error: any) {
       console.error('Error claiming:', error);
@@ -495,9 +572,27 @@ export default function Home() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex gap-3 md:gap-4 justify-center flex-col sm:flex-row">
-                    <button onClick={() => handleShareClick('twitter')} disabled={isSharing || isConfirming} className="px-6 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on 𝕏 (10pts)</button>
-                    <button onClick={() => handleShareClick('farcaster')} disabled={isSharing || isConfirming} className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on Farcaster (10pts)</button>
+                  <div className="space-y-3">
+                    {!canShareState ? (
+                      <>
+                        <div className="flex gap-3 md:gap-4 justify-center flex-col sm:flex-row">
+                          <button disabled className="px-6 py-3 bg-gray-600 text-gray-400 font-medium rounded-lg cursor-not-allowed text-sm md:text-base">
+                            Share on 𝕏 (10pts)
+                          </button>
+                          <button disabled className="px-6 py-3 bg-gray-600 text-gray-400 font-medium rounded-lg cursor-not-allowed text-sm md:text-base">
+                            Share on Farcaster (10pts)
+                          </button>
+                        </div>
+                        <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-sm text-orange-400 text-center">
+                          ⏰ Next share available in {shareCooldown}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="flex gap-3 md:gap-4 justify-center flex-col sm:flex-row">
+                        <button onClick={() => handleShareClick('twitter')} disabled={isSharing || isConfirming} className="px-6 py-3 bg-blue-500 text-white font-medium rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on 𝕏 (10pts)</button>
+                        <button onClick={() => handleShareClick('farcaster')} disabled={isSharing || isConfirming} className="px-6 py-3 bg-purple-600 text-white font-medium rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base">Share on Farcaster (10pts)</button>
+                      </div>
+                    )}
                   </div>
                 )
               )}
