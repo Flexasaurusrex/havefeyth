@@ -14,6 +14,7 @@ import { Avatar } from '@/components/PixelGhost';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useReadContract } from 'wagmi';
+import { checkOpenRank } from '@/lib/openrank';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,6 +104,11 @@ export default function Home() {
   const [nextShareDate, setNextShareDate] = useState<Date | null>(null);
   const [shareCooldown, setShareCooldown] = useState('');
 
+  // OpenRank eligibility state
+  const [openRankEligible, setOpenRankEligible] = useState(true);
+  const [openRankReason, setOpenRankReason] = useState('');
+  const [openRankChecking, setOpenRankChecking] = useState(false);
+
   const isAdmin = address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
 
   const { data: previewRewards } = useReadContract({
@@ -111,6 +117,32 @@ export default function Home() {
     functionName: 'previewClaim',
     args: address ? [address as `0x${string}`] : undefined,
   });
+
+  // Check OpenRank eligibility for Farcaster users
+  useEffect(() => {
+    async function checkEligibility() {
+      if (!farcasterUser?.fid) return;
+      
+      setOpenRankChecking(true);
+      try {
+        const result = await checkOpenRank(farcasterUser.fid);
+        setOpenRankEligible(result.eligible);
+        if (!result.eligible) {
+          setOpenRankReason(result.reason || 'Account not eligible for rewards');
+        }
+      } catch (error) {
+        console.error('OpenRank check error:', error);
+        // Fail open - don't block on error
+        setOpenRankEligible(true);
+      } finally {
+        setOpenRankChecking(false);
+      }
+    }
+    
+    if (isInMiniApp && farcasterUser) {
+      checkEligibility();
+    }
+  }, [isInMiniApp, farcasterUser]);
 
   useEffect(() => {
     async function handleFarcasterUser() {
@@ -355,6 +387,14 @@ export default function Home() {
 
   async function handleClaimAfterShare() {
     if (!address || !selectedPlatform) return;
+    
+    // Block ineligible users from claiming
+    if (isInMiniApp && !openRankEligible) {
+      alert('Your account is not eligible for rewards. Build more social reputation on Farcaster first!');
+      setShowShareConfirm(false);
+      setSelectedPlatform(null);
+      return;
+    }
     
     setIsSharing(true);
     setShowShareConfirm(false);
@@ -620,6 +660,21 @@ export default function Home() {
           </div>
         ) : (
           <>
+            {/* OpenRank eligibility warning for mini app users */}
+            {isInMiniApp && !openRankEligible && !openRankChecking && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center mx-4">
+                <p className="text-red-400 font-medium">⚠️ Not eligible for token rewards</p>
+                <p className="text-sm text-gray-400 mt-1">{openRankReason}</p>
+                <p className="text-xs text-gray-500 mt-2">You can still share Feylons and earn points, but token claims are restricted.</p>
+              </div>
+            )}
+
+            {isInMiniApp && openRankChecking && (
+              <div className="text-center text-purple-400 text-sm">
+                <div className="animate-pulse">Checking eligibility...</div>
+              </div>
+            )}
+
             <div className="space-y-6">
               {hasProfile && (
                 <div className="flex items-center justify-center gap-3 mb-4">
@@ -836,7 +891,14 @@ export default function Home() {
               <p className="text-gray-400">Click "Yes, I Shared!" to claim your rewards</p>
             </div>
 
-            {previewRewards && previewRewards.length > 0 && (
+            {/* Show warning if not eligible */}
+            {isInMiniApp && !openRankEligible && (
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-sm text-orange-400 text-center">
+                ⚠️ Token rewards are restricted for your account. You'll still earn points!
+              </div>
+            )}
+
+            {previewRewards && previewRewards.length > 0 && openRankEligible && (
               <div className="bg-black/50 rounded-lg p-4 border border-white/10">
                 <div className="text-sm text-gray-400 mb-2">You'll receive:</div>
                 {previewRewards.map((reward: any, i: number) => (
