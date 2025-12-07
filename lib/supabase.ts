@@ -153,13 +153,23 @@ export async function recordInteraction(
   displayName?: string,
   twitterHandle?: string,
   farcasterHandle?: string
-) {
+): Promise<{ points: number; success?: boolean; error?: string }> {
   if (!isConfigured()) {
     console.log('Supabase not configured, skipping interaction record');
-    return { points: 0 };
+    return { points: 0, success: false };
   }
 
   try {
+    // Check cooldown before insert to prevent race conditions
+    const { canShare, nextAvailable } = await canUserShare(walletAddress);
+    if (!canShare) {
+      return { 
+        points: 0, 
+        success: false, 
+        error: `Next share available ${nextAvailable?.toLocaleString()}` 
+      };
+    }
+
     const { error } = await supabase
       .from('interactions')
       .insert([
@@ -183,10 +193,10 @@ export async function recordInteraction(
       message_preview: message.substring(0, 50)
     });
 
-    return result;
+    return { ...result, success: true };
   } catch (error) {
     console.error('Error recording interaction:', error);
-    return { points: 0 };
+    return { points: 0, success: false, error: 'Failed to record interaction' };
   }
 }
 
@@ -231,6 +241,50 @@ export async function canUserConfess(walletAddress: string): Promise<{ canConfes
     console.error('Error checking confession cooldown:', error);
     // Fail closed - if we can't verify, don't allow
     return { canConfess: false };
+  }
+}
+
+export async function canUserShare(walletAddress: string): Promise<{ canShare: boolean; nextAvailable?: Date }> {
+  if (!isConfigured()) {
+    return { canShare: true };
+  }
+
+  try {
+    // Check interactions table directly - source of truth
+    // Only check non-confession shares
+    const { data: recentShare, error } = await supabase
+      .from('interactions')
+      .select('created_at')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .eq('is_confession', false)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    
+    // No previous shares
+    if (!recentShare) {
+      return { canShare: true };
+    }
+
+    const lastShare = new Date(recentShare.created_at);
+    const now = new Date();
+    const hoursSinceLastShare = (now.getTime() - lastShare.getTime()) / (1000 * 60 * 60);
+    
+    // 24 hours cooldown
+    if (hoursSinceLastShare >= 24) {
+      return { canShare: true };
+    }
+
+    const nextAvailable = new Date(lastShare);
+    nextAvailable.setHours(nextAvailable.getHours() + 24);
+    
+    return { canShare: false, nextAvailable };
+  } catch (error) {
+    console.error('Error checking share cooldown:', error);
+    // Fail closed - if we can't verify, don't allow
+    return { canShare: false };
   }
 }
 
