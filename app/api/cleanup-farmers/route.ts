@@ -15,7 +15,6 @@ const SECRET = 'feylon-cleanup-2024'; // Simple protection
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 interface Profile {
-  id: string;
   wallet_address: string;
   farcaster_fid: string;
   farcaster_handle: string | null;
@@ -76,7 +75,7 @@ export async function GET(request: Request) {
   while (hasMore) {
     const { data, error } = await supabase
       .from('user_profiles')
-      .select('id, wallet_address, farcaster_fid, farcaster_handle')
+      .select('wallet_address, farcaster_fid, farcaster_handle')
       .not('farcaster_fid', 'is', null)
       .range(offset, offset + 99);
 
