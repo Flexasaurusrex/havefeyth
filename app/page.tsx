@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt, useReadContract } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Image from 'next/image';
@@ -15,6 +15,71 @@ import { Avatar } from '@/components/PixelGhost';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
+
+// Floating ghost message component
+function FloatingTransmission({ message, style, delay }: { message: string; style: React.CSSProperties; delay: number }) {
+  return (
+    <div
+      className="fixed pointer-events-none select-none whitespace-nowrap animate-float-transmission"
+      style={{
+        ...style,
+        animationDelay: `${delay}s`,
+        opacity: 0,
+      }}
+    >
+      <span className="text-sm md:text-base italic">"{message.length > 60 ? message.slice(0, 60) + '...' : message}"</span>
+    </div>
+  );
+}
+
+// Floating transmissions layer
+function FloatingTransmissions({ interactions }: { interactions: Interaction[] }) {
+  const ghostMessages = useMemo(() => {
+    if (interactions.length === 0) return [];
+    
+    // Take up to 12 recent messages for floating display
+    const messages = interactions.slice(0, 12);
+    
+    // Generate random positions and properties for each
+    return messages.map((interaction, i) => {
+      const colors = [
+        'rgba(255, 255, 255, 0.08)',
+        'rgba(200, 200, 200, 0.06)',
+        'rgba(245, 245, 220, 0.07)', // cream
+        'rgba(220, 220, 220, 0.05)',
+        'rgba(255, 250, 240, 0.06)', // off-white
+      ];
+      
+      return {
+        id: interaction.id,
+        message: interaction.message,
+        style: {
+          left: `${5 + Math.random() * 85}%`,
+          top: `${10 + Math.random() * 75}%`,
+          color: colors[i % colors.length],
+          fontSize: `${0.7 + Math.random() * 0.4}rem`,
+          transform: `rotate(${-8 + Math.random() * 16}deg)`,
+        },
+        delay: i * 3 + Math.random() * 5,
+      };
+    });
+  }, [interactions]);
+
+  if (ghostMessages.length === 0) return null;
+
+  return (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+      {ghostMessages.map((ghost) => (
+        <FloatingTransmission
+          key={ghost.id}
+          message={ghost.message}
+          style={ghost.style}
+          delay={ghost.delay}
+        />
+      ))}
+    </div>
+  );
+}
 
 export default function Home() {
   const { address, isConnected } = useAccount();
@@ -401,7 +466,10 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden">
+    <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden relative">
+      {/* Floating ghostly transmissions background */}
+      <FloatingTransmissions interactions={interactions} />
+
       {isConnected && hasProfile && userProfile && (
         <div className="fixed top-4 right-4 z-40">
           <div className="relative">
@@ -495,7 +563,7 @@ export default function Home() {
         </div>
       )}
 
-      <div className="w-full max-w-2xl mx-auto space-y-8 md:space-y-12 animate-fade-in">
+      <div className="w-full max-w-2xl mx-auto space-y-8 md:space-y-12 animate-fade-in relative z-10">
         <div className="text-center space-y-6 md:space-y-8">
           <h1 className="text-6xl md:text-8xl font-light tracking-wider text-glow">
             FEYLON
@@ -614,7 +682,7 @@ export default function Home() {
         )}
       </div>
 
-      <div className="w-full max-w-3xl mx-auto mt-12 md:mt-16 px-4 animate-fade-in">
+      <div className="w-full max-w-3xl mx-auto mt-12 md:mt-16 px-4 animate-fade-in relative z-10">
         <div className="text-center mb-6 md:mb-8">
           <h2 className="text-3xl md:text-4xl font-light mb-2 text-glow">Recent Feylons</h2>
           <p className="text-gray-500 text-sm md:text-base">See what others are sharing 👁️</p>
@@ -836,6 +904,27 @@ export default function Home() {
         html, body { overflow-x: hidden; max-width: 100vw; }
         @keyframes scale-in { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         .animate-scale-in { animation: scale-in 0.3s ease-out; }
+        
+        @keyframes float-transmission {
+          0% {
+            opacity: 0;
+            transform: translateY(20px) translateX(0);
+          }
+          10% {
+            opacity: 1;
+          }
+          90% {
+            opacity: 1;
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-30px) translateX(20px);
+          }
+        }
+        
+        .animate-float-transmission {
+          animation: float-transmission 25s ease-in-out infinite;
+        }
       `}</style>
     </main>
   );
