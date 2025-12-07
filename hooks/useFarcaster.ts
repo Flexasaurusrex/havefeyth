@@ -29,13 +29,17 @@ export function useFarcaster() {
         
         if (context?.user) {
           setIsInMiniApp(true);
+          
+          // Cast to any to handle SDK type variations
+          const u = context.user as any;
+          
           setUser({
-            fid: context.user.fid,
-            username: context.user.username || '',
-            displayName: context.user.displayName,
-            pfpUrl: context.user.pfpUrl,
-            custodyAddress: context.user.custody_address || '',
-            verifiedAddresses: context.user.verified_addresses?.eth_addresses || [],
+            fid: u.fid,
+            username: u.username || '',
+            displayName: u.displayName,
+            pfpUrl: u.pfpUrl,
+            custodyAddress: u.custodyAddress || u.custody_address || '',
+            verifiedAddresses: u.verifiedAddresses?.ethAddresses || u.verified_addresses?.eth_addresses || [],
           });
           
           await sdk.actions.ready();
