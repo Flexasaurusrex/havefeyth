@@ -40,12 +40,12 @@ function FloatingTransmissions({ interactions }: { interactions: Interaction[] }
     
     return messages.map((interaction, i) => {
       const colors = [
-         'rgba(255, 255, 255, 0.25)',
+        'rgba(255, 255, 255, 0.25)',
         'rgba(200, 200, 200, 0.22)',
-  'rgba(245, 245, 220, 0.23)',
-  'rgba(220, 220, 220, 0.20)',
-  'rgba(255, 250, 240, 0.22)',
-];
+        'rgba(245, 245, 220, 0.23)',
+        'rgba(220, 220, 220, 0.20)',
+        'rgba(255, 250, 240, 0.22)',
+      ];
       
       return {
         id: interaction.id,
@@ -73,6 +73,48 @@ function FloatingTransmissions({ interactions }: { interactions: Interaction[] }
           style={ghost.style}
           delay={ghost.delay}
         />
+      ))}
+    </div>
+  );
+}
+
+function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
+  const avatars = useMemo(() => {
+    if (interactions.length === 0) return [];
+    
+    // Get unique wallet addresses
+    const uniqueWallets = [...new Set(interactions.map(i => i.wallet_address))].slice(0, 8);
+    
+    return uniqueWallets.map((wallet, i) => ({
+      wallet,
+      style: {
+        left: `${10 + Math.random() * 80}%`,
+        top: `${15 + Math.random() * 70}%`,
+      },
+      opacity: 0.15 + Math.random() * 0.15,
+      scale: 0.6 + Math.random() * 0.4,
+      delay: i * 4 + Math.random() * 8,
+    }));
+  }, [interactions]);
+
+  if (avatars.length === 0) return null;
+
+  return (
+    <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+      {avatars.map((avatar) => (
+        <div
+          key={avatar.wallet}
+          className="fixed animate-float-avatar"
+          style={{
+            left: avatar.style.left,
+            top: avatar.style.top,
+            opacity: avatar.opacity,
+            transform: `scale(${avatar.scale})`,
+            animationDelay: `${avatar.delay}s`,
+          }}
+        >
+          <Avatar walletAddress={avatar.wallet} size={40} />
+        </div>
       ))}
     </div>
   );
@@ -497,6 +539,7 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden relative">
       <FloatingTransmissions interactions={interactions} />
+      <FloatingAvatars interactions={interactions} />
 
       {isInMiniApp && (
         <div className="fixed top-4 left-4 z-40 px-3 py-1 bg-purple-600/80 backdrop-blur-sm rounded-full text-xs text-white">
@@ -988,6 +1031,27 @@ export default function Home() {
         
         .animate-float-transmission {
           animation: float-transmission 25s ease-in-out infinite;
+        }
+        
+        @keyframes float-avatar {
+          0% {
+            opacity: 0;
+            transform: translateY(30px) rotate(-5deg);
+          }
+          15% {
+            opacity: 0.25;
+          }
+          85% {
+            opacity: 0.25;
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-40px) rotate(5deg);
+          }
+        }
+        
+        .animate-float-avatar {
+          animation: float-avatar 30s ease-in-out infinite;
         }
       `}</style>
     </main>
