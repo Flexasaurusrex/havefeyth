@@ -1,20 +1,40 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createUserProfile } from '@/lib/supabase';
+
+interface FarcasterUser {
+  fid: number;
+  username: string;
+  displayName?: string;
+  pfpUrl?: string;
+}
 
 interface OnboardingModalProps {
   walletAddress: string;
   onComplete: () => void;
+  farcasterUser?: FarcasterUser;
 }
 
-export function OnboardingModal({ walletAddress, onComplete }: OnboardingModalProps) {
+export function OnboardingModal({ walletAddress, onComplete, farcasterUser }: OnboardingModalProps) {
   const [displayName, setDisplayName] = useState('');
   const [twitterHandle, setTwitterHandle] = useState('');
   const [farcasterHandle, setFarcasterHandle] = useState('');
   const [bio, setBio] = useState('');
+  const [profileImageUrl, setProfileImageUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Pre-fill from Farcaster data
+  useEffect(() => {
+    if (farcasterUser) {
+      setDisplayName(farcasterUser.displayName || farcasterUser.username || '');
+      setFarcasterHandle(farcasterUser.username || '');
+      if (farcasterUser.pfpUrl) {
+        setProfileImageUrl(farcasterUser.pfpUrl);
+      }
+    }
+  }, [farcasterUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,6 +63,8 @@ export function OnboardingModal({ walletAddress, onComplete }: OnboardingModalPr
         display_name: displayName.trim(),
         twitter_handle: twitterHandle.trim() || undefined,
         farcaster_handle: farcasterHandle.trim() || undefined,
+        farcaster_fid: farcasterUser?.fid?.toString() || undefined,
+        profile_image_url: profileImageUrl || undefined,
         bio: bio.trim() || undefined,
       });
 
@@ -57,14 +79,32 @@ export function OnboardingModal({ walletAddress, onComplete }: OnboardingModalPr
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-gradient-to-br from-purple-900/90 to-pink-900/90 border border-white/20 rounded-2xl max-w-md w-full p-8 shadow-2xl">
+      <div className="bg-gradient-to-br from-purple-900/90 to-pink-900/90 border border-white/20 rounded-2xl max-w-md w-full p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="text-center mb-6">
-          <div className="text-6xl mb-4">👁️</div>
-          <h2 className="text-3xl font-bold text-white mb-2">Welcome to Feylon!</h2>
+          {farcasterUser?.pfpUrl ? (
+            <img 
+              src={farcasterUser.pfpUrl} 
+              alt="Profile" 
+              className="w-20 h-20 rounded-full mx-auto mb-4 border-2 border-purple-500"
+            />
+          ) : (
+            <div className="text-6xl mb-4">👁️</div>
+          )}
+          <h2 className="text-3xl font-bold text-white mb-2">
+            {farcasterUser ? `Welcome, ${farcasterUser.displayName || farcasterUser.username}!` : 'Welcome to Feylon!'}
+          </h2>
           <p className="text-gray-300 text-sm">
-            Create your profile to start earning points and climbing the leaderboard
+            {farcasterUser 
+              ? 'Confirm your profile details to start earning points'
+              : 'Create your profile to start earning points and climbing the leaderboard'
+            }
           </p>
+          {farcasterUser && (
+            <div className="mt-2 inline-flex items-center gap-2 px-3 py-1 bg-purple-500/20 rounded-full text-xs text-purple-300">
+              🟪 Connected via Warpcast
+            </div>
+          )}
         </div>
 
         {/* Form */}
@@ -106,7 +146,7 @@ export function OnboardingModal({ walletAddress, onComplete }: OnboardingModalPr
           {/* Farcaster Handle */}
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-2">
-              Farcaster Handle (optional)
+              Farcaster Handle {farcasterUser ? '' : '(optional)'}
             </label>
             <div className="relative">
               <span className="absolute left-4 top-3.5 text-gray-500">@</span>
@@ -115,8 +155,12 @@ export function OnboardingModal({ walletAddress, onComplete }: OnboardingModalPr
                 value={farcasterHandle}
                 onChange={(e) => setFarcasterHandle(e.target.value.replace('@', ''))}
                 placeholder="yourhandle"
-                className="w-full pl-8 pr-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors"
+                disabled={!!farcasterUser}
+                className={`w-full pl-8 pr-4 py-3 bg-black/30 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 transition-colors ${farcasterUser ? 'opacity-60 cursor-not-allowed' : ''}`}
               />
+              {farcasterUser && (
+                <span className="absolute right-4 top-3.5 text-green-400 text-sm">✓ verified</span>
+              )}
             </div>
           </div>
 
