@@ -1,0 +1,37 @@
+{
+  "frame": {
+    "name": "Feylon",
+    "version": "1",
+    "iconUrl": "https://feylon.xyz/feylon-logo.png",
+    "homeUrl": "https://feylon.xyz",
+    "imageUrl": "https://feylon.xyz/frame-card.png",
+    "buttonTitle": "Whisper a Secret",
+    "splashImageUrl": "https://feylon.xyz/splash.png",
+    "splashBackgroundColor": "#000000",
+    "webhookUrl": "https://feylon.xyz/api/webhook",
+    "subtitle": "Share. Earn. See.",
+    "description": "Share messages of goodwill or anonymous confessions. Earn points, build streaks, climb the leaderboard, and claim token rewards. The Eye sees all.S",
+    "primaryCategory": "social",
+    "screenshotUrls": [
+      "https://feylon.xyz/screenshot.png"
+    ],
+    "heroImageUrl": "https://feylon.xyz/frame-card.png",
+    "tags": [
+      "social",
+      "rewards",
+      "confessions",
+      "crypto",
+      "base"
+    ],
+    "tagline": "Share. Earn. See.",
+    "ogTitle": "Feylon - Share. Earn. See.",
+    "ogDescription": "Share your truth, earn rewards, climb the leaderboard. The Eye sees all.",
+    "ogImageUrl": "https://feylon.xyz/frame-card.png",
+    "castShareUrl": "https://warpcast.com/~/compose?text=Just%20shared%20a%20Feylon%20%F0%9F%91%81%EF%B8%8F%0A%0Ahttps://feylon.xyz"
+  },
+  "accountAssociation": {
+    "header": "eyJmaWQiOjc0MTgsInR5cGUiOiJhdXRoIiwia2V5IjoiMHgwQjUyOTQ0YTIyMjYxMTI4YURFZmE2ZDQ2MzAwZjNGQTUwQTNlNzhDIn0",
+    "payload": "eyJkb21haW4iOiJmZXlsb24ueHl6In0",
+    "signature": "muRuxUYYuA78kMO0Iwre0phkppacTGw6+m0nMkFsmDcv+anVrlYM6Lk4aOQ5YYx2ubL2ig5g55yR6StSTW8BQRs="
+  }
+}
