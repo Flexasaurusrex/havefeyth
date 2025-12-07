@@ -32,30 +32,22 @@ async function checkOpenRank(fid: string): Promise<{ eligible: boolean; rank: nu
     );
 
     if (!response.ok) {
-      return { eligible: true, rank: -1, reason: 'API error - fail open' };
+      return { eligible: true, rank: -1, reason: `API error ${response.status} - fail open` };
     }
 
     const data = await response.json();
     
-    // Check if result exists and has entries
+    // Response: { result: [{ fid, username, rank, score, percentile }] }
     if (!data.result || data.result.length === 0) {
-      return { eligible: false, rank: 0, reason: 'Not in OpenRank graph (no result)' };
+      return { eligible: false, rank: 0, reason: 'Not in OpenRank graph (empty result)' };
     }
 
     const entry = data.result[0];
+    const rank = entry.rank;
     
-    // OpenRank returns rank as a number, but unranked users might have null/undefined
-    // or might not be in results at all
-    const rank = typeof entry.rank === 'number' ? entry.rank : null;
-    
-    // If rank is null/undefined, they're not properly ranked
-    if (rank === null || rank === undefined) {
-      return { eligible: false, rank: 0, reason: `Not ranked (rank field: ${entry.rank})` };
-    }
-
-    // Rank 0 typically means not in the graph
-    if (rank === 0) {
-      return { eligible: false, rank: 0, reason: 'Rank is 0 (not in graph)' };
+    // No rank = not in graph
+    if (rank === undefined || rank === null) {
+      return { eligible: false, rank: 0, reason: 'No rank returned' };
     }
 
     // Check against threshold
@@ -64,8 +56,8 @@ async function checkOpenRank(fid: string): Promise<{ eligible: boolean; rank: nu
     }
 
     return { eligible: true, rank, reason: 'Eligible' };
-  } catch (error) {
-    return { eligible: true, rank: -1, reason: 'Error - fail open' };
+  } catch (error: any) {
+    return { eligible: true, rank: -1, reason: `Error: ${error.message} - fail open` };
   }
 }
 
