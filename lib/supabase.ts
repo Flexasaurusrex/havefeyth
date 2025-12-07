@@ -403,29 +403,41 @@ export async function getLeaderboard(limit: number = 100): Promise<LeaderboardEn
   if (!isConfigured()) return [];
 
   try {
-    const { data, error } = await supabase
+    // First get user stats
+    const { data: stats, error: statsError } = await supabase
       .from('user_stats')
-      .select(`
-        *,
-        user_profiles (
-          display_name,
-          twitter_handle,
-          farcaster_handle,
-          profile_image_url
-        )
-      `)
+      .select('*')
       .order('total_points', { ascending: false })
       .limit(limit);
 
-    if (error) throw error;
+    if (statsError) throw statsError;
+    if (!stats || stats.length === 0) return [];
 
-    return (data || []).map((entry: any) => ({
-      ...entry,
-      display_name: entry.user_profiles?.display_name,
-      twitter_handle: entry.user_profiles?.twitter_handle,
-      farcaster_handle: entry.user_profiles?.farcaster_handle,
-      profile_image_url: entry.user_profiles?.profile_image_url,
-    }));
+    // Get all wallet addresses
+    const walletAddresses = stats.map(s => s.wallet_address);
+
+    // Fetch profiles for these wallets
+    const { data: profiles } = await supabase
+      .from('user_profiles')
+      .select('wallet_address, display_name, twitter_handle, farcaster_handle, profile_image_url')
+      .in('wallet_address', walletAddresses);
+
+    // Create a map for quick lookup
+    const profileMap = new Map(
+      (profiles || []).map(p => [p.wallet_address, p])
+    );
+
+    // Merge stats with profiles
+    return stats.map((entry: any) => {
+      const profile = profileMap.get(entry.wallet_address);
+      return {
+        ...entry,
+        display_name: profile?.display_name,
+        twitter_handle: profile?.twitter_handle,
+        farcaster_handle: profile?.farcaster_handle,
+        profile_image_url: profile?.profile_image_url,
+      };
+    });
   } catch (error) {
     console.error('Error fetching leaderboard:', error);
     return [];
