@@ -27,28 +27,40 @@ async function checkOpenRank(fid: string): Promise<{ eligible: boolean; rank: nu
     );
 
     if (!response.ok) {
-      return { eligible: true, rank: 0, reason: 'API error - fail open' };
+      return { eligible: true, rank: -1, reason: 'API error - fail open' };
     }
 
     const data = await response.json();
     
+    // Check if result exists and has entries
     if (!data.result || data.result.length === 0) {
-      return { eligible: false, rank: 0, reason: 'Not in OpenRank graph' };
+      return { eligible: false, rank: 0, reason: 'Not in OpenRank graph (no result)' };
     }
 
-    const rank = data.result[0]?.rank || 0;
+    const entry = data.result[0];
+    
+    // OpenRank returns rank as a number, but unranked users might have null/undefined
+    // or might not be in results at all
+    const rank = typeof entry.rank === 'number' ? entry.rank : null;
+    
+    // If rank is null/undefined, they're not properly ranked
+    if (rank === null || rank === undefined) {
+      return { eligible: false, rank: 0, reason: `Not ranked (rank field: ${entry.rank})` };
+    }
 
+    // Rank 0 typically means not in the graph
     if (rank === 0) {
-      return { eligible: false, rank, reason: 'Rank is 0' };
+      return { eligible: false, rank: 0, reason: 'Rank is 0 (not in graph)' };
     }
 
+    // Check against threshold
     if (rank > MAX_RANK) {
-      return { eligible: false, rank, reason: `Rank ${rank} > ${MAX_RANK}` };
+      return { eligible: false, rank, reason: `Rank ${rank.toLocaleString()} > ${MAX_RANK.toLocaleString()}` };
     }
 
     return { eligible: true, rank, reason: 'Eligible' };
   } catch (error) {
-    return { eligible: true, rank: 0, reason: 'Error - fail open' };
+    return { eligible: true, rank: -1, reason: 'Error - fail open' };
   }
 }
 
@@ -63,6 +75,24 @@ export async function GET(request: Request) {
   // Simple auth check
   if (secret !== SECRET) {
     return NextResponse.json({ error: 'Invalid secret' }, { status: 401 });
+  }
+
+  // DEBUG MODE: Check what OpenRank returns for a specific FID
+  const debugFid = searchParams.get('debug');
+  if (debugFid) {
+    const response = await fetch(
+      `https://graph.cast.k3l.io/scores/global/engagement/fids?fids=${debugFid}`
+    );
+    const data = await response.json();
+    return NextResponse.json({
+      mode: 'DEBUG',
+      fid: debugFid,
+      rawResponse: data,
+      resultLength: data.result?.length,
+      firstEntry: data.result?.[0],
+      rankValue: data.result?.[0]?.rank,
+      rankType: typeof data.result?.[0]?.rank
+    });
   }
 
   // MODE: Check profiles WITHOUT Farcaster FID (suspicious wallet-only signups)
