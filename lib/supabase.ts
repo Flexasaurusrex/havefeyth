@@ -196,31 +196,41 @@ export async function canUserConfess(walletAddress: string): Promise<{ canConfes
   }
 
   try {
-    const { data: stats } = await supabase
-      .from('user_stats')
-      .select('last_confession_date')
+    // Check interactions table directly - source of truth
+    // This prevents race conditions from checking user_stats which updates AFTER insert
+    const { data: recentConfession, error } = await supabase
+      .from('interactions')
+      .select('created_at')
       .eq('wallet_address', walletAddress.toLowerCase())
-      .single();
+      .eq('is_confession', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (!stats || !stats.last_confession_date) {
+    if (error) throw error;
+    
+    // No previous confessions
+    if (!recentConfession) {
       return { canConfess: true };
     }
 
-    const lastConfession = new Date(stats.last_confession_date);
+    const lastConfession = new Date(recentConfession.created_at);
     const now = new Date();
-    const daysSinceLastConfession = Math.floor((now.getTime() - lastConfession.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (daysSinceLastConfession >= 3) {
+    const hoursSinceLastConfession = (now.getTime() - lastConfession.getTime()) / (1000 * 60 * 60);
+    
+    // 3 days = 72 hours
+    if (hoursSinceLastConfession >= 72) {
       return { canConfess: true };
     }
 
     const nextAvailable = new Date(lastConfession);
-    nextAvailable.setDate(nextAvailable.getDate() + 3);
+    nextAvailable.setHours(nextAvailable.getHours() + 72);
     
     return { canConfess: false, nextAvailable };
   } catch (error) {
     console.error('Error checking confession cooldown:', error);
-    return { canConfess: true };
+    // Fail closed - if we can't verify, don't allow
+    return { canConfess: false };
   }
 }
 
@@ -234,6 +244,7 @@ export async function recordConfession(
   }
 
   try {
+    // Double-check cooldown right before insert to minimize race window
     const { canConfess, nextAvailable } = await canUserConfess(walletAddress);
     if (!canConfess) {
       return { 
