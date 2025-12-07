@@ -1,28 +1,21 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useFarcaster } from '@/hooks/useFarcaster';
 import { encodeFunctionData } from 'viem';
 
 interface WalletContextType {
-  // Connection state
   isConnected: boolean;
   isReady: boolean;
   address: string | null;
-  
-  // Environment
   isInMiniApp: boolean;
-  
-  // Farcaster user info (if in mini app)
   farcasterUser: {
     fid: number;
     username: string;
     displayName?: string;
     pfpUrl?: string;
   } | null;
-  
-  // Transaction handling
   sendContractTransaction: (params: {
     address: `0x${string}`;
     abi: any;
@@ -30,28 +23,22 @@ interface WalletContextType {
     args?: any[];
     value?: bigint;
   }) => Promise<string | null>;
-  
-  // Transaction state
   isPending: boolean;
   isConfirming: boolean;
   isConfirmed: boolean;
   txHash: string | null;
-  
-  // Reset transaction state
   resetTxState: () => void;
 }
 
 const WalletContext = createContext<WalletContextType | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  // Wagmi hooks (for web browser)
   const { address: wagmiAddress, isConnected: wagmiConnected } = useAccount();
   const { writeContractAsync, data: wagmiHash, reset: resetWagmi } = useWriteContract();
   const { isLoading: wagmiConfirming, isSuccess: wagmiConfirmed } = useWaitForTransactionReceipt({ 
     hash: wagmiHash 
   });
   
-  // Farcaster SDK (for mini app)
   const { 
     isInMiniApp, 
     isReady: farcasterReady, 
@@ -60,17 +47,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     sendTransaction: farcasterSendTx 
   } = useFarcaster();
   
-  // Unified state
   const [isPending, setIsPending] = useState(false);
   const [fcTxHash, setFcTxHash] = useState<string | null>(null);
   const [fcConfirmed, setFcConfirmed] = useState(false);
   
-  // Determine which connection to use
   const isConnected = isInMiniApp ? !!farcasterAddress : wagmiConnected;
   const address = isInMiniApp ? farcasterAddress : wagmiAddress;
   const isReady = isInMiniApp ? farcasterReady : true;
   
-  // Unified transaction sender
   const sendContractTransaction = useCallback(async (params: {
     address: `0x${string}`;
     abi: any;
@@ -83,7 +67,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     
     try {
       if (isInMiniApp && farcasterSendTx) {
-        // Use Farcaster SDK
         const data = encodeFunctionData({
           abi: params.abi,
           functionName: params.functionName,
@@ -98,20 +81,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         
         setFcTxHash(txHash);
         
-        // Simple confirmation - wait a bit then assume confirmed
-        // In production, you'd poll for receipt
         if (txHash) {
           setTimeout(() => setFcConfirmed(true), 3000);
         }
         
         return txHash;
       } else {
-        // Use wagmi
         const hash = await writeContractAsync({
           address: params.address,
           abi: params.abi,
           functionName: params.functionName,
-          args: params.args,
+          args: params.args || [],
           value: params.value,
         });
         
@@ -131,7 +111,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     resetWagmi?.();
   }, [resetWagmi]);
   
-  // Determine transaction state
   const txHash = isInMiniApp ? fcTxHash : wagmiHash;
   const isConfirming = isInMiniApp ? (!!fcTxHash && !fcConfirmed) : wagmiConfirming;
   const isConfirmed = isInMiniApp ? fcConfirmed : wagmiConfirmed;
