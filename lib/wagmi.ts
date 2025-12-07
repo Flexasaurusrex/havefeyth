@@ -1,6 +1,6 @@
 'use client';
 
-import { connectorsForWallets } from '@rainbow-me/rainbowkit';
+import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { 
   metaMaskWallet, 
   rainbowWallet, 
@@ -8,28 +8,21 @@ import {
   walletConnectWallet,
   injectedWallet,
 } from '@rainbow-me/rainbowkit/wallets';
-import { createConfig, http } from 'wagmi';
 import { base } from 'wagmi/chains';
-import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector';
+import { farcasterWallet } from './farcasterWallet';
 
 const projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'feylon-temp-id';
 
-// Create a custom Farcaster wallet for RainbowKit
-const farcasterWallet = () => ({
-  id: 'farcaster',
-  name: 'Farcaster',
-  iconUrl: 'https://warpcast.com/favicon.ico',
-  iconBackground: '#855DCD',
-  createConnector: () => farcasterMiniApp(),
-});
-
-// Combine all wallets including Farcaster
-const connectors = connectorsForWallets(
-  [
+// Clean v2 API - just pass wallets array to getDefaultConfig
+export const config = getDefaultConfig({
+  appName: 'Feylon',
+  projectId,
+  chains: [base],
+  wallets: [
     {
       groupName: 'Recommended',
       wallets: [
-        farcasterWallet,  // Farcaster wallet at the top!
+        farcasterWallet,   // 🟣 Farcaster at the top!
         coinbaseWallet,
         metaMaskWallet,
         rainbowWallet,
@@ -38,17 +31,5 @@ const connectors = connectorsForWallets(
       ],
     },
   ],
-  {
-    appName: 'Feylon',
-    projectId,
-  }
-);
-
-export const config = createConfig({
-  chains: [base],
-  connectors,
-  transports: {
-    [base.id]: http(),
-  },
   ssr: true,
 });
