@@ -12,7 +12,6 @@ export default function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [userRank, setUserRank] = useState<number>(0);
   const [loading, setLoading] = useState(true);
-  const [timeframe, setTimeframe] = useState<'all' | 'month' | 'week'>('all');
 
   useEffect(() => {
     async function loadLeaderboard() {
@@ -33,7 +32,7 @@ export default function LeaderboardPage() {
     // Refresh every 30 seconds
     const interval = setInterval(loadLeaderboard, 30000);
     return () => clearInterval(interval);
-  }, [address, timeframe]);
+  }, [address]);
 
   return (
     <main className="min-h-screen p-4 md:p-8">
@@ -57,42 +56,6 @@ export default function LeaderboardPage() {
               <ConnectButton />
             </div>
           )}
-        </div>
-
-        {/* Timeframe Filter */}
-        <div className="flex justify-center gap-2">
-          <button
-            onClick={() => setTimeframe('all')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              timeframe === 'all'
-                ? 'bg-purple-600 text-white'
-                : 'bg-white/5 text-gray-400 hover:bg-white/10'
-            }`}
-          >
-            All Time
-          </button>
-          <button
-            onClick={() => setTimeframe('month')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              timeframe === 'month'
-                ? 'bg-purple-600 text-white'
-                : 'bg-white/5 text-gray-400 hover:bg-white/10'
-            }`}
-            disabled
-          >
-            This Month (Coming Soon)
-          </button>
-          <button
-            onClick={() => setTimeframe('week')}
-            className={`px-4 py-2 rounded-lg transition-colors ${
-              timeframe === 'week'
-                ? 'bg-purple-600 text-white'
-                : 'bg-white/5 text-gray-400 hover:bg-white/10'
-            }`}
-            disabled
-          >
-            This Week (Coming Soon)
-          </button>
         </div>
 
         {/* Your Rank (if connected) */}
