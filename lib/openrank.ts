@@ -1,51 +1,34 @@
-// lib/openrank.ts
-// Filters farmers by checking Farcaster reputation via OpenRank
-// Uses server-side API route to avoid CORS issues
+const MAX_RANK = 50000;
 
 export interface OpenRankResult {
   eligible: boolean;
-  rank: number;
-  score: number;
+  rank?: number;
   reason?: string;
+  message?: string;
 }
 
-export async function checkOpenRank(fid: number): Promise<OpenRankResult> {
-  // No FID = not eligible (shouldn't happen in mini app)
-  if (!fid) {
-    return { 
-      eligible: false, 
-      rank: 0, 
-      score: 0, 
-      reason: 'No Farcaster ID found' 
-    };
-  }
-
+export async function checkOpenRankEligibility(fid: string | number): Promise<OpenRankResult> {
   try {
-    // Call our API route (server-side) to avoid CORS
-    const res = await fetch('/api/check-openrank', {
+    const response = await fetch('/api/check-openrank', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fid })
+      body: JSON.stringify({ fid: parseInt(String(fid)) })
     });
-    
-    if (!res.ok) {
-      console.error('OpenRank API error:', res.status);
+
+    if (!response.ok) {
+      console.error('OpenRank proxy error:', response.status);
       // Fail open - don't block real users
-      return { eligible: true, rank: 0, score: 0 };
+      return { eligible: true, reason: 'proxy_error' };
     }
-    
-    const result = await res.json();
-    return result;
-    
+
+    const data = await response.json();
+    return data;
+
   } catch (error) {
     console.error('OpenRank check failed:', error);
-    // Fail open on network errors - don't block real users
-    return { eligible: true, rank: 0, score: 0 };
+    // Fail open on network errors
+    return { eligible: true, reason: 'network_error' };
   }
 }
 
-// Quick check without full details
-export async function isEligibleFid(fid: number): Promise<boolean> {
-  const result = await checkOpenRank(fid);
-  return result.eligible;
-}
+export { MAX_RANK };
