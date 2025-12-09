@@ -1,74 +1,56 @@
-// app/api/check-openrank/route.ts
-// Server-side proxy for OpenRank API to avoid CORS issues
+import { NextRequest, NextResponse } from 'next/server';
 
-import { NextResponse } from 'next/server';
-
-const OPENRANK_API = 'https://graph.cast.k3l.io/scores/global/engagement/fids';
 const MAX_RANK = 50000;
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { fid } = await request.json();
-
+    
     if (!fid) {
-      return NextResponse.json({
-        eligible: false,
-        rank: 0,
-        score: 0,
-        reason: 'No Farcaster ID provided'
-      });
+      return NextResponse.json({ eligible: false, error: 'No FID provided' }, { status: 400 });
     }
 
-    const res = await fetch(OPENRANK_API, {
+    const response = await fetch('https://graph.cast.k3l.io/scores/global/engagement/fids', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify([parseInt(fid)])
     });
 
-    if (!res.ok) {
-      console.error('OpenRank API error:', res.status);
-      // Fail open - don't block real users
-      return NextResponse.json({ eligible: true, rank: 0, score: 0 });
+    if (!response.ok) {
+      console.error('OpenRank API error:', response.status);
+      // Fail open - don't block real users if API is down
+      return NextResponse.json({ eligible: true, reason: 'api_error' });
     }
 
-    const data = await res.json();
-    const result = data?.result?.[0];
-
-    if (!result) {
-      return NextResponse.json({
-        eligible: false,
-        rank: 0,
-        score: 0,
-        reason: 'Account not found in Farcaster social graph'
+    const data = await response.json();
+    
+    if (!data.result || data.result.length === 0) {
+      // User not in OpenRank graph - likely a farmer
+      return NextResponse.json({ 
+        eligible: false, 
+        reason: 'not_in_graph',
+        message: 'Account not found in reputation graph'
       });
     }
 
-    const rank = result.rank || 0;
-    const score = result.score || 0;
+    const userRank = data.result[0].rank;
+    const eligible = userRank <= MAX_RANK;
 
-    if (rank === 0) {
-      return NextResponse.json({
-        eligible: false,
-        rank: 0,
-        score: 0,
-        reason: 'Account has no social reputation yet'
-      });
-    }
-
-    if (rank > MAX_RANK) {
-      return NextResponse.json({
-        eligible: false,
-        rank,
-        score,
-        reason: `Account rank (${rank.toLocaleString()}) is outside top ${MAX_RANK.toLocaleString()}`
-      });
-    }
-
-    return NextResponse.json({ eligible: true, rank, score });
+    return NextResponse.json({
+      eligible,
+      rank: userRank,
+      maxRank: MAX_RANK,
+      reason: eligible ? 'rank_ok' : 'rank_too_low'
+    });
 
   } catch (error) {
-    console.error('OpenRank check failed:', error);
+    console.error('OpenRank check error:', error);
     // Fail open on errors
-    return NextResponse.json({ eligible: true, rank: 0, score: 0 });
+    return NextResponse.json({ eligible: true, reason: 'error' });
   }
+}
+
+// Handle OPTIONS for CORS preflight
+export async function OPTIONS() {
+  return NextResponse.json({}, { status: 200 });
 }
