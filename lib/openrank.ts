@@ -32,3 +32,6 @@ export async function checkOpenRankEligibility(fid: string | number): Promise<Op
 }
 
 export { MAX_RANK };
+
+// Alias for backward compatibility
+export const checkOpenRank = checkOpenRankEligibility;
