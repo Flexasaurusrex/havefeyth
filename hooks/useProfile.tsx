@@ -1,71 +1,84 @@
-'use client';
-import { useState, useEffect, useRef } from 'react';
-import { useWallet } from '@/contexts/WalletContext';
-import { hasUserProfile } from '@/lib/supabase';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { getUserProfile, hasUserProfile, findUserProfile } from '@/lib/supabase';
+import type { UserProfile } from '@/lib/supabase';
 
-/**
- * Hook to check if user has a profile and show onboarding if needed
- * Works with both RainbowKit (web) and Farcaster SDK (mini app)
- * Returns:
- * - hasProfile: boolean - whether user has completed profile
- * - loading: boolean - whether we're still checking (true until first check completes)
- * - refresh: function - manually refresh profile status
- */
-export function useProfile() {
-  const { address, isConnected, isReady } = useWallet();
-  const [hasProfile, setHasProfile] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(true);
-  const hasChecked = useRef(false);
+interface UseProfileResult {
+  profile: UserProfile | null;
+  loading: boolean;
+  hasProfile: boolean;
+  refetch: () => Promise<void>;
+}
 
-  const checkProfile = async () => {
-    if (!address || !isConnected || !isReady) {
-      // Not ready yet - keep loading true until we can actually check
-      if (!isReady) {
-        setLoading(true);
-        return;
-      }
-      // Ready but no address/connection - no profile
+export function useProfile(address: string | undefined, fid?: string): UseProfileResult {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [hasProfile, setHasProfile] = useState(false);
+  const hasCheckedRef = useRef(false);
+  const lastAddressRef = useRef<string | undefined>(undefined);
+
+  const fetchProfile = useCallback(async () => {
+    if (!address) {
+      setProfile(null);
       setHasProfile(false);
       setLoading(false);
-      hasChecked.current = true;
+      hasCheckedRef.current = true;
       return;
     }
 
-    // Don't set loading true on refresh if we've already checked
-    // This prevents the modal from flickering
-    if (!hasChecked.current) {
+    // Only show loading on first check, not refreshes
+    if (!hasCheckedRef.current) {
       setLoading(true);
     }
 
     try {
-      const profileExists = await hasUserProfile(address);
-      setHasProfile(profileExists);
-      hasChecked.current = true;
+      // First try to find by FID if available
+      if (fid) {
+        const existingProfile = await findUserProfile(fid, undefined, address);
+        if (existingProfile) {
+          setProfile(existingProfile);
+          setHasProfile(true);
+          setLoading(false);
+          hasCheckedRef.current = true;
+          return;
+        }
+      }
+
+      // Fall back to wallet address lookup
+      const userProfile = await getUserProfile(address);
+      if (userProfile) {
+        setProfile(userProfile);
+        setHasProfile(true);
+      } else {
+        const exists = await hasUserProfile(address);
+        setHasProfile(exists);
+        if (!exists) {
+          setProfile(null);
+        }
+      }
     } catch (error) {
-      console.error('Error checking profile:', error);
+      console.error('Error fetching profile:', error);
+      setProfile(null);
       setHasProfile(false);
     } finally {
       setLoading(false);
+      hasCheckedRef.current = true;
     }
-  };
+  }, [address, fid]);
 
   useEffect(() => {
     // Reset check state when address changes
-    if (!address) {
-      hasChecked.current = false;
-      setHasProfile(false);
-      setLoading(true);
-      return;
+    if (lastAddressRef.current !== address) {
+      hasCheckedRef.current = false;
+      lastAddressRef.current = address;
     }
-
-    if (isReady && address) {
-      checkProfile();
-    }
-  }, [address, isConnected, isReady]);
+    
+    fetchProfile();
+  }, [fetchProfile, address]);
 
   return {
-    hasProfile,
+    profile,
     loading,
-    refresh: checkProfile,
+    hasProfile,
+    refetch: fetchProfile,
   };
 }
