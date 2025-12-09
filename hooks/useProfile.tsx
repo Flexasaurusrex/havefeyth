@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useAccount } from 'wagmi';
 import { getUserProfile, hasUserProfile, findUserProfile } from '@/lib/supabase';
 import type { UserProfile } from '@/lib/supabase';
 
@@ -7,9 +8,11 @@ interface UseProfileResult {
   loading: boolean;
   hasProfile: boolean;
   refetch: () => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
-export function useProfile(address: string | undefined, fid?: string): UseProfileResult {
+export function useProfile(): UseProfileResult {
+  const { address } = useAccount();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [hasProfile, setHasProfile] = useState(false);
@@ -31,28 +34,23 @@ export function useProfile(address: string | undefined, fid?: string): UseProfil
     }
 
     try {
-      // First try to find by FID if available
-      if (fid) {
-        const existingProfile = await findUserProfile(fid, undefined, address);
-        if (existingProfile) {
-          setProfile(existingProfile);
-          setHasProfile(true);
-          setLoading(false);
-          hasCheckedRef.current = true;
-          return;
-        }
-      }
-
-      // Fall back to wallet address lookup
+      // First try wallet address lookup
       const userProfile = await getUserProfile(address);
       if (userProfile) {
         setProfile(userProfile);
         setHasProfile(true);
       } else {
-        const exists = await hasUserProfile(address);
-        setHasProfile(exists);
-        if (!exists) {
-          setProfile(null);
+        // Check if profile exists by FID lookup
+        const existingProfile = await findUserProfile(undefined, undefined, address);
+        if (existingProfile) {
+          setProfile(existingProfile);
+          setHasProfile(true);
+        } else {
+          const exists = await hasUserProfile(address);
+          setHasProfile(exists);
+          if (!exists) {
+            setProfile(null);
+          }
         }
       }
     } catch (error) {
@@ -63,7 +61,7 @@ export function useProfile(address: string | undefined, fid?: string): UseProfil
       setLoading(false);
       hasCheckedRef.current = true;
     }
-  }, [address, fid]);
+  }, [address]);
 
   useEffect(() => {
     // Reset check state when address changes
@@ -80,5 +78,6 @@ export function useProfile(address: string | undefined, fid?: string): UseProfil
     loading,
     hasProfile,
     refetch: fetchProfile,
+    refresh: fetchProfile,
   };
 }
