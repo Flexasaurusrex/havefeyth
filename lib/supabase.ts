@@ -105,17 +105,27 @@ export async function awardPoints(
   }
 
   try {
-    const { data: stats } = await supabase
+    const wallet = walletAddress.toLowerCase();
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Get current stats
+    const { data: stats, error: fetchError } = await supabase
       .from('user_stats')
-      .select('current_streak, last_share_date')
-      .eq('wallet_address', walletAddress.toLowerCase())
+      .select('*')
+      .eq('wallet_address', wallet)
       .single();
 
+    // Ignore "no rows" error
+    if (fetchError && fetchError.code !== 'PGRST116') {
+      console.error('Error fetching stats:', fetchError);
+    }
+
     let streakDays = 1;
+    let newStreak = 1;
+    
     if (stats && reason === 'own_share') {
       const lastShare = stats.last_share_date ? new Date(stats.last_share_date) : null;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
       
       if (lastShare) {
         const lastShareDate = new Date(lastShare);
@@ -123,23 +133,70 @@ export async function awardPoints(
         const daysDiff = Math.floor((today.getTime() - lastShareDate.getTime()) / (1000 * 60 * 60 * 24));
         
         if (daysDiff === 1) {
-          streakDays = (stats.current_streak || 0) + 1;
+          // Consecutive day - increment streak
+          newStreak = (stats.current_streak || 0) + 1;
         } else if (daysDiff === 0) {
-          streakDays = stats.current_streak || 1;
+          // Same day - keep streak
+          newStreak = stats.current_streak || 1;
+        } else {
+          // Streak broken - reset to 1
+          newStreak = 1;
         }
       }
+      streakDays = newStreak;
+    } else if (stats) {
+      newStreak = stats.current_streak || 1;
     }
 
     const points = calculatePoints(reason, streakDays);
 
-    const { error } = await supabase.rpc('update_user_stats', {
-      p_wallet_address: walletAddress.toLowerCase(),
-      p_points: points,
-      p_reason: reason,
-      p_metadata: metadata || {}
-    });
+    if (stats) {
+      // Update existing stats
+      const updates: any = {
+        total_points: (stats.total_points || 0) + points,
+        updated_at: new Date().toISOString()
+      };
+      
+      if (reason === 'own_share') {
+        updates.feylons_shared = (stats.feylons_shared || 0) + 1;
+        updates.current_streak = newStreak;
+        updates.best_streak = Math.max(stats.best_streak || 0, newStreak);
+        updates.last_share_date = today.toISOString().split('T')[0];
+      } else if (reason === 'received_share') {
+        updates.feylons_received_shares = (stats.feylons_received_shares || 0) + 1;
+      }
+      
+      const { error } = await supabase
+        .from('user_stats')
+        .update(updates)
+        .eq('wallet_address', wallet);
+      
+      if (error) {
+        console.error('Error updating stats:', error);
+        throw error;
+      }
+    } else {
+      // Insert new stats
+      const { error } = await supabase
+        .from('user_stats')
+        .insert({
+          wallet_address: wallet,
+          total_points: points,
+          feylons_shared: reason === 'own_share' ? 1 : 0,
+          feylons_received_shares: reason === 'received_share' ? 1 : 0,
+          current_streak: 1,
+          best_streak: 1,
+          last_share_date: today.toISOString().split('T')[0],
+          created_at: new Date().toISOString()
+        });
+      
+      if (error) {
+        console.error('Error inserting stats:', error);
+        throw error;
+      }
+    }
 
-    if (error) throw error;
+    console.log(`✅ Awarded ${points} points to ${wallet} for ${reason}`);
     return { points, streak: streakDays };
   } catch (error) {
     console.error('Error awarding points:', error);
@@ -380,7 +437,10 @@ export async function getUserStats(walletAddress: string): Promise<UserStats | n
       .eq('wallet_address', walletAddress.toLowerCase())
       .single();
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === 'PGRST116') return null;
+      throw error;
+    }
     return data;
   } catch (error) {
     console.error('Error fetching user stats:', error);
