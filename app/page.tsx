@@ -15,6 +15,13 @@ import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useReadContract } from 'wagmi';
 import { checkOpenRank } from '@/lib/openrank';
+import { 
+  CollaborationModal, 
+  CollaborationBanner, 
+  useFeaturedCollaboration,
+  checkCollabEligibility,
+  markCollabClaimed 
+} from '@/components/CollaborationModal';
 
 export const dynamic = 'force-dynamic';
 
@@ -112,7 +119,6 @@ function SplashExperience() {
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl animate-pulse" />
       <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-pink-500/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
       
-      {/* Floating ghost messages */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
         {floatingSecrets.map((transmission, index) => {
           const gridColumns = 3;
@@ -156,7 +162,6 @@ function SplashExperience() {
       </div>
       
       <div className="relative z-10 max-w-2xl w-full space-y-8 text-center animate-fade-in">
-        {/* Eye GIF */}
         <div className={`relative w-80 h-80 mx-auto mb-8 transition-all duration-1000 ${
           showEye ? 'opacity-100 scale-100' : 'opacity-0 scale-50'
         }`}>
@@ -170,7 +175,6 @@ function SplashExperience() {
           <div className="absolute inset-0 rounded-full bg-gradient-to-r from-purple-500/30 to-pink-500/30 blur-2xl animate-pulse" />
         </div>
 
-        {/* Title */}
         <div className="space-y-2">
           <h1 className="text-6xl font-light tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-pink-400 to-purple-400 animate-gradient">
             FEYLON
@@ -260,7 +264,6 @@ function SplashExperience() {
           </div>
         )}
 
-        {/* CTA to Farcaster - always visible */}
         <div className="pt-12 space-y-6">
           <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-500/30 rounded-2xl p-6 space-y-4">
             <p className="text-white font-medium">🎁 Earn rewards by sharing on Farcaster</p>
@@ -358,6 +361,10 @@ function MiniAppExperience() {
   
   const { hasProfile, loading: profileLoading, refresh } = useProfile();
   
+  const { collaboration: featuredCollab } = useFeaturedCollaboration();
+  const [showCollabModal, setShowCollabModal] = useState(false);
+  const [collabBonusEarned, setCollabBonusEarned] = useState<{ amount: number; symbol: string } | null>(null);
+  
   const [message, setMessage] = useState('');
   const [isGlowing, setIsGlowing] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -385,12 +392,10 @@ function MiniAppExperience() {
   const [nextShareDate, setNextShareDate] = useState<Date | null>(null);
   const [shareCooldown, setShareCooldown] = useState('');
 
-  // OpenRank eligibility state
   const [openRankEligible, setOpenRankEligible] = useState(true);
   const [openRankReason, setOpenRankReason] = useState('');
   const [openRankChecking, setOpenRankChecking] = useState(false);
   
-  // Prevent re-running handlers
   const [farcasterHandled, setFarcasterHandled] = useState(false);
 
   const isAdmin = address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_ADDRESS?.toLowerCase();
@@ -402,7 +407,6 @@ function MiniAppExperience() {
     args: address ? [address as `0x${string}`] : undefined,
   });
 
-  // Check OpenRank eligibility for Farcaster users
   useEffect(() => {
     async function checkEligibility() {
       if (!farcasterUser?.fid) return;
@@ -427,7 +431,6 @@ function MiniAppExperience() {
     }
   }, [farcasterUser]);
 
-  // Handle Farcaster user linking - run once when user is ready
   useEffect(() => {
     async function handleFarcasterUser() {
       if (!farcasterUser || !address || farcasterHandled) return;
@@ -458,22 +461,18 @@ function MiniAppExperience() {
     }
   }, [isReady, farcasterUser, address, farcasterHandled, refresh]);
 
-  // Only OPEN onboarding when conditions are met - never auto-close it
-  // Closing happens via onComplete callback or when profile is created
   useEffect(() => {
     if (isConnected && !profileLoading && !hasProfile && address && isReady) {
       setShowOnboarding(true);
     }
   }, [isConnected, profileLoading, hasProfile, address, isReady]);
 
-  // Close onboarding when profile is created
   useEffect(() => {
     if (hasProfile && showOnboarding) {
       setShowOnboarding(false);
     }
   }, [hasProfile, showOnboarding]);
 
-  // Load interactions once on mount - no polling
   useEffect(() => {
     async function loadInteractions() {
       const data = await getAllInteractions();
@@ -681,7 +680,6 @@ function MiniAppExperience() {
   async function handleClaimAfterShare() {
     if (!address || !selectedPlatform) return;
     
-    // Block ineligible users from claiming
     if (!openRankEligible) {
       alert('Your account is not eligible for rewards. Build more social reputation on Farcaster first!');
       setShowShareConfirm(false);
@@ -727,6 +725,20 @@ function MiniAppExperience() {
           type: reward.rewardType === 0 ? 'ERC20' : reward.rewardType === 1 ? 'ERC721' : 'ERC1155',
         }));
         setClaimedRewards(formattedRewards);
+      }
+      
+      // Check and award collaboration bonus
+      const collabResult = await checkCollabEligibility(address);
+      if (collabResult.eligible && collabResult.collaboration) {
+        await markCollabClaimed(
+          collabResult.collaboration.id, 
+          address, 
+          collabResult.collaboration.token_amount_per_claim
+        );
+        setCollabBonusEarned({
+          amount: collabResult.collaboration.token_amount_per_claim,
+          symbol: collabResult.collaboration.token_symbol || 'tokens'
+        });
       }
       
       setMessage('');
@@ -930,7 +942,6 @@ function MiniAppExperience() {
           </div>
         ) : (
           <>
-            {/* OpenRank eligibility warning */}
             {!openRankEligible && !openRankChecking && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center mx-4">
                 <p className="text-red-400 font-medium">⚠️ Not eligible for token rewards</p>
@@ -943,6 +954,14 @@ function MiniAppExperience() {
               <div className="text-center text-purple-400 text-sm">
                 <div className="animate-pulse">Checking eligibility...</div>
               </div>
+            )}
+
+            {featuredCollab && hasProfile && address && (
+              <CollaborationBanner 
+                collaboration={featuredCollab} 
+                walletAddress={address}
+                onClick={() => setShowCollabModal(true)} 
+              />
             )}
 
             <div className="space-y-6">
@@ -1039,7 +1058,6 @@ function MiniAppExperience() {
         )}
       </div>
 
-      {/* Recent Feylons Feed */}
       <div className="w-full max-w-3xl mx-auto mt-12 md:mt-16 px-4 animate-fade-in relative z-10">
         <div className="text-center mb-6 md:mb-8">
           <h2 className="text-3xl md:text-4xl font-light mb-2 text-glow">Recent Feylons</h2>
@@ -1139,7 +1157,6 @@ function MiniAppExperience() {
         )}
       </div>
 
-      {/* Share Confirm Modal */}
       {showShareConfirm && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
           <div className="bg-gradient-to-br from-purple-900 to-black border border-purple-500/50 rounded-2xl p-8 max-w-md mx-4 space-y-6 animate-scale-in">
@@ -1175,7 +1192,6 @@ function MiniAppExperience() {
         </div>
       )}
 
-      {/* What Is Modal */}
       {showWhatIsModal && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in p-4">
           <div className="bg-gradient-to-br from-purple-900/90 via-black to-pink-900/90 border-2 border-purple-500/50 rounded-2xl max-w-2xl w-full p-8 md:p-12 space-y-6 animate-scale-in relative overflow-y-auto max-h-[90vh]">
@@ -1242,6 +1258,15 @@ function MiniAppExperience() {
         </div>
       )}
 
+      {showCollabModal && featuredCollab && address && (
+        <CollaborationModal
+          collaboration={featuredCollab}
+          walletAddress={address}
+          onClose={() => setShowCollabModal(false)}
+          openUrl={openUrl}
+        />
+      )}
+
       {showOnboarding && address && (
         <OnboardingModal 
           walletAddress={address} 
@@ -1251,20 +1276,23 @@ function MiniAppExperience() {
       )}
 
       {showToast && claimedRewards.length > 0 && (
-        <RewardToast rewards={claimedRewards} onClose={() => { setShowToast(false); setClaimedRewards([]); }} />
+        <RewardToast 
+          rewards={claimedRewards} 
+          collabBonus={collabBonusEarned || undefined}
+          onClose={() => { 
+            setShowToast(false); 
+            setClaimedRewards([]); 
+            setCollabBonusEarned(null);
+          }} 
+        />
       )}
     </main>
   );
 }
 
-// ============================================
-// MAIN PAGE - Context Detection
-// ============================================
-
 export default function Home() {
   const { isInMiniApp, isReady } = useWallet();
 
-  // Loading state
   if (!isReady) {
     return (
       <main className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
@@ -1276,17 +1304,12 @@ export default function Home() {
     );
   }
 
-  // Route based on context
   if (isInMiniApp) {
     return <MiniAppExperience />;
   }
 
   return <SplashExperience />;
 }
-
-// ============================================
-// STYLES
-// ============================================
 
 const styles = `
   html, body { overflow-x: hidden; max-width: 100vw; }
@@ -1323,7 +1346,6 @@ const styles = `
   .animate-float-splash { animation: float-splash linear infinite; }
 `;
 
-// Inject styles
 if (typeof document !== 'undefined') {
   const styleSheet = document.createElement('style');
   styleSheet.textContent = styles;
