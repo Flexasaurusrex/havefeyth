@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 
@@ -53,7 +54,7 @@ const emptyCollab: Partial<Collaboration> = {
 };
 
 export default function AdminCollaborationsPage() {
-  const { address } = useAccount();
+  const { address, isConnected } = useAccount();
   const [collaborations, setCollaborations] = useState<Collaboration[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -201,10 +202,27 @@ export default function AdminCollaborationsPage() {
     setShowForm(true);
   }
 
+  if (!isConnected) {
+    return (
+      <main className="min-h-screen flex flex-col items-center justify-center gap-6">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold">Admin Access Required</h1>
+          <p className="text-gray-400">Connect your admin wallet to continue</p>
+        </div>
+        <ConnectButton />
+      </main>
+    );
+  }
+
   if (!isAdmin) {
     return (
-      <main className="min-h-screen flex items-center justify-center">
-        <p className="text-red-500">Unauthorized</p>
+      <main className="min-h-screen flex flex-col items-center justify-center gap-6">
+        <div className="text-center space-y-4">
+          <p className="text-red-500 text-xl">Unauthorized</p>
+          <p className="text-gray-400 text-sm">Connected wallet is not an admin</p>
+          <p className="text-gray-500 text-xs font-mono">{address}</p>
+        </div>
+        <ConnectButton />
       </main>
     );
   }
