@@ -12,12 +12,18 @@ export interface RewardItem {
   symbol: string;
 }
 
+interface CollabBonus {
+  amount: number;
+  symbol: string;
+}
+
 interface RewardToastProps {
   rewards: RewardItem[];
+  collabBonus?: CollabBonus;
   onClose: () => void;
 }
 
-export function RewardToast({ rewards, onClose }: RewardToastProps) {
+export function RewardToast({ rewards, collabBonus, onClose }: RewardToastProps) {
   const [isVisible, setIsVisible] = useState(false);
   const [showRewards, setShowRewards] = useState(false);
 
@@ -28,14 +34,14 @@ export function RewardToast({ rewards, onClose }: RewardToastProps) {
     // Show rewards with stagger
     setTimeout(() => setShowRewards(true), 300);
     
-    // Auto close after 5 seconds
+    // Auto close after 6 seconds (extra time if collab bonus)
     const timer = setTimeout(() => {
       setIsVisible(false);
       setTimeout(onClose, 300);
-    }, 5000);
+    }, collabBonus ? 6000 : 5000);
     
     return () => clearTimeout(timer);
-  }, [onClose]);
+  }, [onClose, collabBonus]);
 
   const getRewardEmoji = (rewardType: number) => {
     if (rewardType === 0) return '🪙'; // ERC20
@@ -105,6 +111,29 @@ export function RewardToast({ rewards, onClose }: RewardToastProps) {
               <div className="text-green-400 text-xl">✓</div>
             </div>
           ))}
+
+          {/* Collaboration Bonus */}
+          {collabBonus && (
+            <div
+              className={`flex items-center gap-3 p-3 bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg border border-purple-500/30 transition-all duration-300 ${
+                showRewards
+                  ? 'translate-x-0 opacity-100'
+                  : 'translate-x-4 opacity-0'
+              }`}
+              style={{
+                transitionDelay: `${rewards.length * 100 + 100}ms`,
+              }}
+            >
+              <div className="text-4xl">🎁</div>
+              <div className="flex-1">
+                <div className="font-medium text-lg text-purple-300">
+                  +{collabBonus.amount.toLocaleString()} ${collabBonus.symbol}
+                </div>
+                <div className="text-xs text-purple-400">Partner Collaboration Bonus!</div>
+              </div>
+              <div className="text-purple-400 text-xl animate-pulse">✨</div>
+            </div>
+          )}
         </div>
 
         {/* Close Button */}
@@ -121,21 +150,3 @@ export function RewardToast({ rewards, onClose }: RewardToastProps) {
     </div>
   );
 }
-
-// Add these animations to your globals.css:
-/*
-@keyframes glow-pulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.9)) 
-            drop-shadow(0 0 40px rgba(255, 255, 255, 0.5));
-  }
-  50% {
-    filter: drop-shadow(0 0 30px rgba(255, 255, 255, 1)) 
-            drop-shadow(0 0 60px rgba(255, 255, 255, 0.7));
-  }
-}
-
-.animate-glow-pulse {
-  animation: glow-pulse 2s ease-in-out infinite;
-}
-*/
