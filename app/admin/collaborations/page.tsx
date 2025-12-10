@@ -385,13 +385,14 @@ export default function AdminCollaborationsPage() {
                       {collab.require_all_socials && <span className="text-xs text-orange-400">(all required)</span>}
                     </div>
                   </div>
-                  <div>
-                    <div className="text-xs text-gray-500">Dates</div>
-                    <div className="text-sm">
-                      {new Date(collab.start_date).toLocaleDateString()}
-                      {collab.end_date ? ` → ${new Date(collab.end_date).toLocaleDateString()}` : ' → No end'}
+                  {collab.end_date && (
+                    <div>
+                      <div className="text-xs text-gray-500">Ends</div>
+                      <div className="text-sm">
+                        {new Date(collab.end_date).toLocaleDateString()}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -590,25 +591,15 @@ export default function AdminCollaborationsPage() {
                 {/* Timing */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-purple-400">Timing & Limits</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">Start Date</label>
-                      <input
-                        type="datetime-local"
-                        value={formData.start_date || ''}
-                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                        className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">End Date (optional)</label>
-                      <input
-                        type="datetime-local"
-                        value={formData.end_date || ''}
-                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                        className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">End Date (optional)</label>
+                    <input
+                      type="datetime-local"
+                      value={formData.end_date || ''}
+                      onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
+                      className="w-full bg-black/50 border border-white/20 rounded-lg px-4 py-2 focus:outline-none focus:border-purple-500"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Leave empty for no expiration</p>
                   </div>
                   <div>
                     <label className="block text-sm text-gray-400 mb-1">Max Claims (leave empty for unlimited)</label>
