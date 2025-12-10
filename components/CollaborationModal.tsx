@@ -121,87 +121,87 @@ export function CollaborationModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 animate-fade-in">
       <div 
         className="bg-gradient-to-br from-purple-900/95 to-black border-2 rounded-2xl max-w-md w-full overflow-hidden animate-scale-in"
         style={{ borderColor: collaboration.partner_color + '80' }}
       >
         {/* Header with co-branding */}
         <div 
-          className="p-6 text-center relative"
+          className="px-4 py-3 text-center relative"
           style={{ background: `linear-gradient(135deg, ${collaboration.partner_color}30, transparent)` }}
         >
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 text-gray-400 hover:text-white text-xl"
+            className="absolute top-2 right-3 text-gray-400 hover:text-white text-lg"
           >
             ✕
           </button>
 
-          <div className="flex items-center justify-center gap-4 mb-4">
+          <div className="flex items-center justify-center gap-3 mb-2">
             {collaboration.partner_logo_url ? (
               <img
                 src={collaboration.partner_logo_url}
                 alt={collaboration.partner_name}
-                className="w-16 h-16 rounded-xl object-cover"
+                className="w-10 h-10 rounded-lg object-cover"
               />
             ) : (
               <div
-                className="w-16 h-16 rounded-xl flex items-center justify-center text-2xl font-bold"
+                className="w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold"
                 style={{ backgroundColor: collaboration.partner_color }}
               >
                 {collaboration.partner_name.charAt(0)}
               </div>
             )}
-            <span className="text-2xl text-gray-500">×</span>
-            <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
-              <span className="text-3xl">👁️</span>
+            <span className="text-xl text-gray-500">×</span>
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
+              <span className="text-xl">👁️</span>
             </div>
           </div>
 
-          <h2 className="text-2xl font-bold mb-1">
+          <h2 className="text-lg font-bold">
             🎁 {collaboration.partner_name} × Feylon
           </h2>
-          <p className="text-gray-400 text-sm">Limited Time Collaboration</p>
+          <p className="text-gray-400 text-xs">Limited Time Collaboration</p>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="px-4 py-3 space-y-3">
           {/* What you earn */}
-          <div className="bg-black/30 rounded-xl p-4 text-center">
-            <p className="text-gray-400 text-sm mb-2">Complete tasks and share to earn:</p>
-            <div className="text-3xl font-bold" style={{ color: collaboration.partner_color }}>
-              {collaboration.token_amount_per_claim} {collaboration.token_symbol}
+          <div className="bg-black/30 rounded-lg p-2 text-center">
+            <p className="text-gray-400 text-xs">Complete tasks and share to earn:</p>
+            <div className="text-2xl font-bold" style={{ color: collaboration.partner_color }}>
+              {collaboration.token_amount_per_claim.toLocaleString()} {collaboration.token_symbol}
             </div>
-            <p className="text-xs text-gray-500 mt-1">+ regular Feylon rewards & points</p>
+            <p className="text-xs text-gray-500">+ regular Feylon rewards & points</p>
           </div>
 
           {/* Custom message */}
           {collaboration.custom_message && (
-            <p className="text-center text-gray-300 text-sm italic">
+            <p className="text-center text-gray-300 text-xs italic">
               "{collaboration.custom_message}"
             </p>
           )}
 
           {/* Social requirements */}
           {socials.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400 text-center">
+            <div className="space-y-2">
+              <p className="text-xs text-gray-400 text-center">
                 {collaboration.require_all_socials 
                   ? `Complete all ${requiredSocials} tasks:` 
                   : 'Complete at least one task:'}
               </p>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {socials.map((social) => (
                   <button
                     key={social.key}
                     onClick={() => handleSocialClick(social)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all ${
+                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all text-sm ${
                       social.clicked
                         ? 'bg-green-500/20 text-green-400'
                         : 'bg-white/10 hover:bg-white/20 text-white'
                     }`}
                   >
-                    <span className="text-xl">{social.clicked ? '✓' : social.icon}</span>
+                    <span className="text-lg">{social.clicked ? '✓' : social.icon}</span>
                     <span className="flex-1 text-left">{social.label}</span>
                     {!social.clicked && <span className="text-gray-500">→</span>}
                   </button>
@@ -209,7 +209,7 @@ export function CollaborationModal({
               </div>
               {socials.length > 1 && (
                 <div className="flex items-center justify-center gap-2">
-                  <div className="flex-1 h-2 bg-white/10 rounded-full overflow-hidden">
+                  <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
                     <div 
                       className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
                       style={{ width: `${(clickedCount / requiredSocials) * 100}%` }}
@@ -223,16 +223,16 @@ export function CollaborationModal({
 
           {/* Status message */}
           {allComplete ? (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4 text-center">
-              <p className="text-green-400 font-medium">✓ Tasks complete!</p>
-              <p className="text-sm text-gray-400 mt-1">
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 text-center">
+              <p className="text-green-400 font-medium text-sm">✓ Tasks complete!</p>
+              <p className="text-xs text-gray-400">
                 Now share a Feylon to claim your {collaboration.token_symbol} bonus
               </p>
             </div>
           ) : (
-            <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 text-center">
-              <p className="text-purple-400 font-medium">Complete the tasks above</p>
-              <p className="text-sm text-gray-400 mt-1">
+            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2 text-center">
+              <p className="text-purple-400 font-medium text-sm">Complete the tasks above</p>
+              <p className="text-xs text-gray-400">
                 Then share a Feylon to earn bonus rewards
               </p>
             </div>
@@ -241,20 +241,22 @@ export function CollaborationModal({
           {/* Done button */}
           <button
             onClick={onClose}
-            className="w-full py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all"
+            className="w-full py-3 rounded-lg font-bold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all"
           >
             {allComplete ? 'Done - Ready to Share!' : 'Close'}
           </button>
 
           {/* Stats footer */}
-          <div className="flex items-center justify-center gap-4 text-xs text-gray-500 pt-2 border-t border-white/10">
-            {daysRemaining !== null && (
-              <span>⏰ {daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left</span>
-            )}
-            {collaboration.max_claims && (
-              <span>📊 {Math.max(0, collaboration.max_claims - collaboration.claims_count)} remaining</span>
-            )}
-          </div>
+          {(daysRemaining !== null || collaboration.max_claims) && (
+            <div className="flex items-center justify-center gap-4 text-xs text-gray-500 pt-1 border-t border-white/10">
+              {daysRemaining !== null && (
+                <span>⏰ {daysRemaining}d left</span>
+              )}
+              {collaboration.max_claims && (
+                <span>📊 {Math.max(0, collaboration.max_claims - collaboration.claims_count)} remaining</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
