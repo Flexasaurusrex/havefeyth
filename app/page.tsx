@@ -19,6 +19,7 @@ import {
   CollaborationModal, 
   CollaborationBanner, 
   useFeaturedCollaboration,
+  useCollabIntroSeen,
   checkCollabEligibility,
   markCollabClaimed 
 } from '@/components/CollaborationModal';
@@ -362,8 +363,21 @@ function MiniAppExperience() {
   const { hasProfile, loading: profileLoading, refresh } = useProfile();
   
   const { collaboration: featuredCollab } = useFeaturedCollaboration();
+  const { seen: collabIntroSeen, markSeen: markCollabIntroSeen } = useCollabIntroSeen(featuredCollab?.id || null);
   const [showCollabModal, setShowCollabModal] = useState(false);
   const [collabBonusEarned, setCollabBonusEarned] = useState<{ amount: number; symbol: string } | null>(null);
+  
+  // Auto-show collab modal when user has profile + active collab + hasn't seen it this session
+  useEffect(() => {
+    if (hasProfile && featuredCollab && !collabIntroSeen && !profileLoading) {
+      setShowCollabModal(true);
+    }
+  }, [hasProfile, featuredCollab, collabIntroSeen, profileLoading]);
+  
+  const handleCloseCollabModal = () => {
+    markCollabIntroSeen();
+    setShowCollabModal(false);
+  };
   
   const [message, setMessage] = useState('');
   const [isGlowing, setIsGlowing] = useState(false);
@@ -1258,11 +1272,10 @@ function MiniAppExperience() {
         </div>
       )}
 
-      {showCollabModal && featuredCollab && address && (
+      {showCollabModal && featuredCollab && (
         <CollaborationModal
           collaboration={featuredCollab}
-          walletAddress={address}
-          onClose={() => setShowCollabModal(false)}
+          onClose={handleCloseCollabModal}
           openUrl={openUrl}
         />
       )}
