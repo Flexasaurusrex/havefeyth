@@ -24,242 +24,197 @@ export interface Collaboration {
 
 interface CollaborationModalProps {
   collaboration: Collaboration;
-  walletAddress: string;
   onClose: () => void;
   openUrl: (url: string) => void;
 }
 
+// Full-screen intro modal shown when app opens with active campaign
 export function CollaborationModal({
   collaboration,
-  walletAddress,
   onClose,
   openUrl,
 }: CollaborationModalProps) {
-  const [clickedTwitter, setClickedTwitter] = useState(false);
-  const [clickedFarcaster, setClickedFarcaster] = useState(false);
-  const [clickedDiscord, setClickedDiscord] = useState(false);
-  const [clickedWebsite, setClickedWebsite] = useState(false);
-  const [loading, setLoading] = useState(true);
-
+  
   const socials = [
-    { key: 'twitter', url: collaboration.twitter_url, label: 'Follow on X', icon: '𝕏', clicked: clickedTwitter, setClicked: setClickedTwitter },
-    { key: 'farcaster', url: collaboration.farcaster_url, label: 'Follow on Warpcast', icon: '🟪', clicked: clickedFarcaster, setClicked: setClickedFarcaster },
-    { key: 'discord', url: collaboration.discord_url, label: 'Join Discord', icon: '💬', clicked: clickedDiscord, setClicked: setClickedDiscord },
-    { key: 'website', url: collaboration.website_url, label: 'Visit Website', icon: '🌐', clicked: clickedWebsite, setClicked: setClickedWebsite },
+    { key: 'twitter', url: collaboration.twitter_url, label: 'Follow on X', icon: '𝕏' },
+    { key: 'farcaster', url: collaboration.farcaster_url, label: 'Follow on Warpcast', icon: '🟪' },
+    { key: 'discord', url: collaboration.discord_url, label: 'Join Discord', icon: '💬' },
+    { key: 'website', url: collaboration.website_url, label: 'Visit Website', icon: '🌐' },
   ].filter(s => s.url);
 
-  const requiredSocials = socials.length;
-  const clickedCount = socials.filter(s => s.clicked).length;
-  
-  const allComplete = collaboration.require_all_socials
-    ? clickedCount === requiredSocials
-    : clickedCount > 0 || requiredSocials === 0;
+  return (
+    <div className="fixed inset-0 bg-black z-50 flex flex-col animate-fade-in">
+      {/* Background gradient */}
+      <div 
+        className="absolute inset-0"
+        style={{ 
+          background: `linear-gradient(135deg, ${collaboration.partner_color}30 0%, #000 50%, rgba(168, 85, 247, 0.2) 100%)` 
+        }}
+      />
+      
+      {/* Close button */}
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 z-10 text-gray-400 hover:text-white text-2xl p-2"
+      >
+        ✕
+      </button>
 
-  // Load existing progress
+      {/* Content */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-8 text-center">
+        
+        {/* Partner logo */}
+        <div className="mb-6">
+          {collaboration.partner_logo_url ? (
+            <img
+              src={collaboration.partner_logo_url}
+              alt={collaboration.partner_name}
+              className="w-24 h-24 rounded-2xl object-cover mx-auto"
+              style={{ boxShadow: `0 0 40px ${collaboration.partner_color}50` }}
+            />
+          ) : (
+            <div
+              className="w-24 h-24 rounded-2xl flex items-center justify-center text-4xl font-bold mx-auto"
+              style={{ backgroundColor: collaboration.partner_color }}
+            >
+              {collaboration.partner_name.charAt(0)}
+            </div>
+          )}
+        </div>
+
+        {/* Partner name + Feylon */}
+        <h1 className="text-2xl font-bold text-white mb-2">
+          {collaboration.partner_name} × Feylon
+        </h1>
+        <p className="text-gray-400 text-sm mb-6">Limited Time Collaboration</p>
+
+        {/* Reward amount - big and prominent */}
+        <div 
+          className="bg-black/50 border rounded-2xl px-8 py-6 mb-6"
+          style={{ borderColor: collaboration.partner_color + '50' }}
+        >
+          <p className="text-gray-400 text-sm mb-2">Earn per share:</p>
+          <div 
+            className="text-4xl font-black"
+            style={{ color: collaboration.partner_color }}
+          >
+            {collaboration.token_amount_per_claim.toLocaleString()} {collaboration.token_symbol}
+          </div>
+          <p className="text-gray-500 text-xs mt-2">+ regular Feylon rewards</p>
+        </div>
+
+        {/* Custom message from partner */}
+        {collaboration.custom_message && (
+          <p className="text-gray-300 text-sm mb-6 max-w-xs italic">
+            "{collaboration.custom_message}"
+          </p>
+        )}
+
+        {/* Social CTAs */}
+        {socials.length > 0 && (
+          <div className="w-full max-w-xs space-y-3 mb-8">
+            <p className="text-gray-500 text-xs uppercase tracking-wider mb-3">
+              Support the partner
+            </p>
+            {socials.map((social) => (
+              <button
+                key={social.key}
+                onClick={() => openUrl(social.url!)}
+                className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl font-medium transition-all bg-white/10 hover:bg-white/20 text-white"
+              >
+                <span className="text-xl">{social.icon}</span>
+                <span>{social.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Continue button */}
+        <button
+          onClick={onClose}
+          className="w-full max-w-xs py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all"
+        >
+          Start Sharing 👁️
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Small banner for main page (shown after modal dismissed)
+export function CollaborationBanner({ 
+  collaboration, 
+  onClick,
+  walletAddress,
+}: { 
+  collaboration: Collaboration;
+  onClick: () => void;
+  walletAddress: string;
+}) {
+  const [claimed, setClaimed] = useState(false);
+  const [loading, setLoading] = useState(true);
+
   useEffect(() => {
-    async function loadProgress() {
+    async function checkStatus() {
       const { data } = await supabase
         .from('collaboration_claims')
-        .select('clicked_twitter, clicked_farcaster, clicked_discord, clicked_website')
+        .select('claimed_reward')
         .eq('collaboration_id', collaboration.id)
         .eq('wallet_address', walletAddress.toLowerCase())
         .single();
 
-      if (data) {
-        setClickedTwitter(data.clicked_twitter);
-        setClickedFarcaster(data.clicked_farcaster);
-        setClickedDiscord(data.clicked_discord);
-        setClickedWebsite(data.clicked_website);
-      }
+      setClaimed(data?.claimed_reward || false);
       setLoading(false);
     }
 
-    loadProgress();
+    checkStatus();
   }, [collaboration.id, walletAddress]);
 
-  async function handleSocialClick(social: typeof socials[0]) {
-    // Open the URL in new tab
-    openUrl(social.url!);
-    
-    // Update local state
-    social.setClicked(true);
-
-    // Update database
-    const updateField = `clicked_${social.key}`;
-    
-    // Check if we now have all required socials
-    const newClickedCount = clickedCount + (social.clicked ? 0 : 1);
-    const nowComplete = collaboration.require_all_socials
-      ? newClickedCount === requiredSocials
-      : newClickedCount > 0;
-    
-    await supabase
-      .from('collaboration_claims')
-      .upsert({
-        collaboration_id: collaboration.id,
-        wallet_address: walletAddress.toLowerCase(),
-        [updateField]: true,
-        completed_socials: nowComplete,
-      }, {
-        onConflict: 'collaboration_id,wallet_address'
-      });
-  }
-
-  // Calculate time remaining
-  const timeRemaining = collaboration.end_date
-    ? Math.max(0, new Date(collaboration.end_date).getTime() - Date.now())
-    : null;
-  
-  const daysRemaining = timeRemaining ? Math.ceil(timeRemaining / (1000 * 60 * 60 * 24)) : null;
-
-  if (loading) {
-    return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className="animate-spin text-4xl">👁️</div>
-      </div>
-    );
-  }
+  // Don't show banner if already claimed or still loading
+  if (loading || claimed) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-2 animate-fade-in">
-      <div 
-        className="bg-gradient-to-br from-purple-900/95 to-black border-2 rounded-2xl max-w-md w-full overflow-hidden animate-scale-in"
-        style={{ borderColor: collaboration.partner_color + '80' }}
-      >
-        {/* Header with co-branding */}
-        <div 
-          className="px-4 py-3 text-center relative"
-          style={{ background: `linear-gradient(135deg, ${collaboration.partner_color}30, transparent)` }}
-        >
-          <button
-            onClick={onClose}
-            className="absolute top-2 right-3 text-gray-400 hover:text-white text-lg"
+    <button
+      onClick={onClick}
+      className="w-full bg-gradient-to-r from-purple-900/50 to-pink-900/50 border rounded-xl p-3 text-left hover:border-purple-400 transition-all group"
+      style={{ 
+        borderColor: collaboration.partner_color + '60',
+        background: `linear-gradient(135deg, ${collaboration.partner_color}20, rgba(168, 85, 247, 0.2))`
+      }}
+    >
+      <div className="flex items-center gap-3">
+        {collaboration.partner_logo_url ? (
+          <img
+            src={collaboration.partner_logo_url}
+            alt={collaboration.partner_name}
+            className="w-10 h-10 rounded-lg object-cover"
+          />
+        ) : (
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold"
+            style={{ backgroundColor: collaboration.partner_color }}
           >
-            ✕
-          </button>
-
-          <div className="flex items-center justify-center gap-3 mb-2">
-            {collaboration.partner_logo_url ? (
-              <img
-                src={collaboration.partner_logo_url}
-                alt={collaboration.partner_name}
-                className="w-10 h-10 rounded-lg object-cover"
-              />
-            ) : (
-              <div
-                className="w-10 h-10 rounded-lg flex items-center justify-center text-lg font-bold"
-                style={{ backgroundColor: collaboration.partner_color }}
-              >
-                {collaboration.partner_name.charAt(0)}
-              </div>
-            )}
-            <span className="text-xl text-gray-500">×</span>
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center">
-              <span className="text-xl">👁️</span>
-            </div>
+            {collaboration.partner_name.charAt(0)}
           </div>
-
-          <h2 className="text-lg font-bold">
-            🎁 {collaboration.partner_name} × Feylon
-          </h2>
-          <p className="text-gray-400 text-xs">Limited Time Collaboration</p>
+        )}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-white truncate">
+              🎁 {collaboration.partner_name}
+            </span>
+            <span className="px-1.5 py-0.5 bg-green-500/20 text-green-400 text-xs rounded flex-shrink-0">
+              LIVE
+            </span>
+          </div>
+          <p className="text-xs text-gray-400 truncate">
+            {collaboration.token_amount_per_claim.toLocaleString()} {collaboration.token_symbol} per share
+          </p>
         </div>
-
-        <div className="px-4 py-3 space-y-3">
-          {/* What you earn */}
-          <div className="bg-black/30 rounded-lg p-2 text-center">
-            <p className="text-gray-400 text-xs">Complete tasks and share to earn:</p>
-            <div className="text-2xl font-bold" style={{ color: collaboration.partner_color }}>
-              {collaboration.token_amount_per_claim.toLocaleString()} {collaboration.token_symbol}
-            </div>
-            <p className="text-xs text-gray-500">+ regular Feylon rewards & points</p>
-          </div>
-
-          {/* Custom message */}
-          {collaboration.custom_message && (
-            <p className="text-center text-gray-300 text-xs italic">
-              "{collaboration.custom_message}"
-            </p>
-          )}
-
-          {/* Social requirements */}
-          {socials.length > 0 && (
-            <div className="space-y-2">
-              <p className="text-xs text-gray-400 text-center">
-                {collaboration.require_all_socials 
-                  ? `Complete all ${requiredSocials} tasks:` 
-                  : 'Complete at least one task:'}
-              </p>
-              <div className="space-y-1.5">
-                {socials.map((social) => (
-                  <button
-                    key={social.key}
-                    onClick={() => handleSocialClick(social)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg font-medium transition-all text-sm ${
-                      social.clicked
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-white/10 hover:bg-white/20 text-white'
-                    }`}
-                  >
-                    <span className="text-lg">{social.clicked ? '✓' : social.icon}</span>
-                    <span className="flex-1 text-left">{social.label}</span>
-                    {!social.clicked && <span className="text-gray-500">→</span>}
-                  </button>
-                ))}
-              </div>
-              {socials.length > 1 && (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-300"
-                      style={{ width: `${(clickedCount / requiredSocials) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-gray-500">{clickedCount}/{requiredSocials}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Status message */}
-          {allComplete ? (
-            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-2 text-center">
-              <p className="text-green-400 font-medium text-sm">✓ Tasks complete!</p>
-              <p className="text-xs text-gray-400">
-                Now share a Feylon to claim your {collaboration.token_symbol} bonus
-              </p>
-            </div>
-          ) : (
-            <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-2 text-center">
-              <p className="text-purple-400 font-medium text-sm">Complete the tasks above</p>
-              <p className="text-xs text-gray-400">
-                Then share a Feylon to earn bonus rewards
-              </p>
-            </div>
-          )}
-
-          {/* Done button */}
-          <button
-            onClick={onClose}
-            className="w-full py-3 rounded-lg font-bold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all"
-          >
-            {allComplete ? 'Done - Ready to Share!' : 'Close'}
-          </button>
-
-          {/* Stats footer */}
-          {(daysRemaining !== null || collaboration.max_claims) && (
-            <div className="flex items-center justify-center gap-4 text-xs text-gray-500 pt-1 border-t border-white/10">
-              {daysRemaining !== null && (
-                <span>⏰ {daysRemaining}d left</span>
-              )}
-              {collaboration.max_claims && (
-                <span>📊 {Math.max(0, collaboration.max_claims - collaboration.claims_count)} remaining</span>
-              )}
-            </div>
-          )}
+        <div className="text-gray-400 group-hover:text-white transition-colors flex-shrink-0">
+          →
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -270,20 +225,31 @@ export function useFeaturedCollaboration() {
 
   useEffect(() => {
     async function load() {
-      const now = new Date().toISOString();
-      
       const { data, error } = await supabase
         .from('collaborations')
         .select('*')
         .eq('is_active', true)
         .eq('is_featured', true)
-        .lte('start_date', now)
         .single();
 
-      // Filter out expired collabs client-side
-      if (data && (!data.end_date || new Date(data.end_date) > new Date())) {
-        setCollaboration(data);
+      if (data && !error) {
+        // Check if not expired
+        if (data.end_date && new Date(data.end_date) < new Date()) {
+          setCollaboration(null);
+        } 
+        // Check if not sold out
+        else if (data.max_claims && data.claims_count >= data.max_claims) {
+          setCollaboration(null);
+        }
+        // Check if has budget
+        else if (data.remaining_budget < data.token_amount_per_claim) {
+          setCollaboration(null);
+        }
+        else {
+          setCollaboration(data);
+        }
       }
+      
       setLoading(false);
     }
 
@@ -293,21 +259,44 @@ export function useFeaturedCollaboration() {
   return { collaboration, loading };
 }
 
-// Check if user is eligible for collab bonus (call after share)
+// Hook to check if user has seen the collab intro modal this session
+export function useCollabIntroSeen(collabId: string | null) {
+  const [seen, setSeen] = useState(false);
+  
+  useEffect(() => {
+    if (!collabId) return;
+    
+    // Check sessionStorage for this collab
+    const key = `collab_intro_seen_${collabId}`;
+    if (typeof window !== 'undefined') {
+      const wasSeen = sessionStorage.getItem(key) === 'true';
+      setSeen(wasSeen);
+    }
+  }, [collabId]);
+  
+  const markSeen = () => {
+    if (!collabId) return;
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(`collab_intro_seen_${collabId}`, 'true');
+    }
+    setSeen(true);
+  };
+  
+  return { seen, markSeen };
+}
+
+// Check if user can claim collab bonus (no gating, just check if already claimed)
 export async function checkCollabEligibility(walletAddress: string): Promise<{
   eligible: boolean;
   collaboration?: Collaboration;
 }> {
   try {
-    const now = new Date().toISOString();
-    
     // Get active featured collaboration
     const { data: collab } = await supabase
       .from('collaborations')
       .select('*')
       .eq('is_active', true)
       .eq('is_featured', true)
-      .lte('start_date', now)
       .single();
 
     if (!collab) return { eligible: false };
@@ -326,19 +315,20 @@ export async function checkCollabEligibility(walletAddress: string): Promise<{
       return { eligible: false };
     }
 
-    // Check user's progress
+    // Check if user already claimed this collab
     const { data: claim } = await supabase
       .from('collaboration_claims')
-      .select('*')
+      .select('claimed_reward')
       .eq('collaboration_id', collab.id)
       .eq('wallet_address', walletAddress.toLowerCase())
       .single();
 
-    // Must have completed socials and not already claimed
-    if (!claim || !claim.completed_socials || claim.claimed_reward) {
+    // If already claimed, not eligible
+    if (claim?.claimed_reward) {
       return { eligible: false };
     }
 
+    // Everyone with an active collab gets the bonus (no social gate)
     return { eligible: true, collaboration: collab };
   } catch (error) {
     console.error('Error checking collab eligibility:', error);
@@ -353,15 +343,17 @@ export async function markCollabClaimed(
   tokenAmount: number
 ): Promise<boolean> {
   try {
-    // Update the claim record
+    // Upsert the claim record (handles users who never clicked banner)
     await supabase
       .from('collaboration_claims')
-      .update({
+      .upsert({
+        collaboration_id: collaborationId,
+        wallet_address: walletAddress.toLowerCase(),
         claimed_reward: true,
         claimed_at: new Date().toISOString(),
-      })
-      .eq('collaboration_id', collaborationId)
-      .eq('wallet_address', walletAddress.toLowerCase());
+      }, {
+        onConflict: 'collaboration_id,wallet_address'
+      });
 
     // Update collaboration stats
     const { data: collab } = await supabase
@@ -385,94 +377,4 @@ export async function markCollabClaimed(
     console.error('Error marking collab claimed:', error);
     return false;
   }
-}
-
-// Banner component for main page
-export function CollaborationBanner({ 
-  collaboration, 
-  onClick,
-  walletAddress,
-}: { 
-  collaboration: Collaboration;
-  onClick: () => void;
-  walletAddress: string;
-}) {
-  const [status, setStatus] = useState<'loading' | 'incomplete' | 'ready' | 'claimed'>('loading');
-
-  useEffect(() => {
-    async function checkStatus() {
-      const { data } = await supabase
-        .from('collaboration_claims')
-        .select('completed_socials, claimed_reward')
-        .eq('collaboration_id', collaboration.id)
-        .eq('wallet_address', walletAddress.toLowerCase())
-        .single();
-
-      if (data?.claimed_reward) {
-        setStatus('claimed');
-      } else if (data?.completed_socials) {
-        setStatus('ready');
-      } else {
-        setStatus('incomplete');
-      }
-    }
-
-    checkStatus();
-  }, [collaboration.id, walletAddress]);
-
-  // Don't show banner if already claimed
-  if (status === 'claimed') return null;
-
-  return (
-    <button
-      onClick={onClick}
-      className="w-full bg-gradient-to-r from-purple-900/50 to-pink-900/50 border rounded-xl p-4 text-left hover:border-purple-400 transition-all group"
-      style={{ 
-        borderColor: collaboration.partner_color + '60',
-        background: `linear-gradient(135deg, ${collaboration.partner_color}20, rgba(168, 85, 247, 0.2))`
-      }}
-    >
-      <div className="flex items-center gap-4">
-        {collaboration.partner_logo_url ? (
-          <img
-            src={collaboration.partner_logo_url}
-            alt={collaboration.partner_name}
-            className="w-12 h-12 rounded-lg object-cover"
-          />
-        ) : (
-          <div
-            className="w-12 h-12 rounded-lg flex items-center justify-center text-xl font-bold"
-            style={{ backgroundColor: collaboration.partner_color }}
-          >
-            {collaboration.partner_name.charAt(0)}
-          </div>
-        )}
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-white">
-              🎁 {collaboration.partner_name} Collab
-            </span>
-            {status === 'ready' ? (
-              <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">
-                ✓ READY
-              </span>
-            ) : (
-              <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded animate-pulse">
-                LIVE
-              </span>
-            )}
-          </div>
-          <p className="text-sm text-gray-400">
-            {status === 'ready' 
-              ? `Share to claim ${collaboration.token_amount_per_claim} ${collaboration.token_symbol}!`
-              : `Earn ${collaboration.token_amount_per_claim} ${collaboration.token_symbol} per share`
-            }
-          </p>
-        </div>
-        <div className="text-gray-400 group-hover:text-white transition-colors">
-          →
-        </div>
-      </div>
-    </button>
-  );
 }
