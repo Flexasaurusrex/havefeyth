@@ -145,34 +145,10 @@ export function CollaborationModal({
 export function CollaborationBanner({ 
   collaboration, 
   onClick,
-  walletAddress,
 }: { 
   collaboration: Collaboration;
   onClick: () => void;
-  walletAddress: string;
 }) {
-  const [claimed, setClaimed] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function checkStatus() {
-      const { data } = await supabase
-        .from('collaboration_claims')
-        .select('claimed_reward')
-        .eq('collaboration_id', collaboration.id)
-        .eq('wallet_address', walletAddress.toLowerCase())
-        .single();
-
-      setClaimed(data?.claimed_reward || false);
-      setLoading(false);
-    }
-
-    checkStatus();
-  }, [collaboration.id, walletAddress]);
-
-  // Don't show banner if already claimed or still loading
-  if (loading || claimed) return null;
-
   return (
     <button
       onClick={onClick}
