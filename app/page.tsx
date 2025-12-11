@@ -427,7 +427,8 @@ function MiniAppExperience() {
       
       setOpenRankChecking(true);
       try {
-        const result = await checkOpenRank(farcasterUser.fid);
+        // Pass power badge status - verified accounts bypass graph check
+        const result = await checkOpenRank(farcasterUser.fid, (farcasterUser as any).powerBadge);
         setOpenRankEligible(result.eligible);
         if (!result.eligible) {
           setOpenRankReason(result.reason || 'Account not eligible for rewards');
@@ -695,7 +696,7 @@ function MiniAppExperience() {
     if (!address || !selectedPlatform) return;
     
     if (!openRankEligible) {
-      alert('Your account is not eligible for rewards. Build more social reputation on Farcaster first!');
+      alert('Your account is not eligible for token rewards yet. DM @flexasaurusrex on Warpcast to appeal! You can still share and earn points.');
       setShowShareConfirm(false);
       setSelectedPlatform(null);
       return;
@@ -959,8 +960,10 @@ function MiniAppExperience() {
             {!openRankEligible && !openRankChecking && (
               <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-4 text-center mx-4">
                 <p className="text-red-400 font-medium">⚠️ Not eligible for token rewards</p>
-                <p className="text-sm text-gray-400 mt-1">{openRankReason}</p>
-                <p className="text-xs text-gray-500 mt-2">You can still share Feylons and earn points, but token claims are restricted.</p>
+                <p className="text-sm text-gray-400 mt-2">
+                  New to Farcaster? DM <a href="https://warpcast.com/flexasaurusrex" target="_blank" rel="noopener noreferrer" className="text-purple-400 hover:text-purple-300 underline">@flexasaurusrex</a> to appeal!
+                </p>
+                <p className="text-xs text-gray-500 mt-2">You can still share Feylons and earn points, but token claims are restricted to prevent bots.</p>
               </div>
             )}
 
