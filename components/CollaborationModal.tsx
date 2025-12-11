@@ -55,26 +55,26 @@ export function CollaborationModal({
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 z-10 text-gray-400 hover:text-white text-2xl p-2"
+        className="absolute top-3 right-3 z-10 text-gray-400 hover:text-white text-xl p-2"
       >
         ✕
       </button>
 
       {/* Content */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-6 py-8 text-center">
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center px-5 py-4 text-center">
         
         {/* Partner logo */}
-        <div className="mb-6">
+        <div className="mb-3">
           {collaboration.partner_logo_url ? (
             <img
               src={collaboration.partner_logo_url}
               alt={collaboration.partner_name}
-              className="w-24 h-24 rounded-2xl object-cover mx-auto"
-              style={{ boxShadow: `0 0 40px ${collaboration.partner_color}50` }}
+              className="w-20 h-20 rounded-xl object-cover mx-auto"
+              style={{ boxShadow: `0 0 30px ${collaboration.partner_color}50` }}
             />
           ) : (
             <div
-              className="w-24 h-24 rounded-2xl flex items-center justify-center text-4xl font-bold mx-auto"
+              className="w-20 h-20 rounded-xl flex items-center justify-center text-3xl font-bold mx-auto"
               style={{ backgroundColor: collaboration.partner_color }}
             >
               {collaboration.partner_name.charAt(0)}
@@ -83,46 +83,46 @@ export function CollaborationModal({
         </div>
 
         {/* Partner name + Feylon */}
-        <h1 className="text-2xl font-bold text-white mb-2">
+        <h1 className="text-xl font-bold text-white mb-1">
           {collaboration.partner_name} × Feylon
         </h1>
-        <p className="text-gray-400 text-sm mb-6">Limited Time Collaboration</p>
+        <p className="text-gray-400 text-xs mb-4">Limited Time Collaboration</p>
 
         {/* Reward amount - big and prominent */}
         <div 
-          className="bg-black/50 border rounded-2xl px-8 py-6 mb-6"
+          className="bg-black/50 border rounded-xl px-6 py-4 mb-4 w-full max-w-xs"
           style={{ borderColor: collaboration.partner_color + '50' }}
         >
-          <p className="text-gray-400 text-sm mb-2">Earn per share:</p>
+          <p className="text-gray-400 text-xs mb-1">Earn per share:</p>
           <div 
-            className="text-4xl font-black"
+            className="text-3xl font-black"
             style={{ color: collaboration.partner_color }}
           >
             {collaboration.token_amount_per_claim.toLocaleString()} {collaboration.token_symbol}
           </div>
-          <p className="text-gray-500 text-xs mt-2">+ regular Feylon rewards</p>
+          <p className="text-gray-500 text-xs mt-1">+ regular Feylon rewards</p>
         </div>
 
         {/* Custom message from partner */}
         {collaboration.custom_message && (
-          <p className="text-gray-300 text-sm mb-6 max-w-xs italic">
+          <p className="text-gray-300 text-xs mb-4 max-w-xs italic leading-tight">
             "{collaboration.custom_message}"
           </p>
         )}
 
         {/* Social CTAs */}
         {socials.length > 0 && (
-          <div className="w-full max-w-xs space-y-3 mb-8">
-            <p className="text-gray-500 text-xs uppercase tracking-wider mb-3">
+          <div className="w-full max-w-xs space-y-2 mb-4">
+            <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">
               Support the partner
             </p>
             {socials.map((social) => (
               <button
                 key={social.key}
                 onClick={() => openUrl(social.url!)}
-                className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-xl font-medium transition-all bg-white/10 hover:bg-white/20 text-white"
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all bg-white/10 hover:bg-white/20 text-white text-sm"
               >
-                <span className="text-xl">{social.icon}</span>
+                <span className="text-lg">{social.icon}</span>
                 <span>{social.label}</span>
               </button>
             ))}
@@ -132,7 +132,7 @@ export function CollaborationModal({
         {/* Continue button */}
         <button
           onClick={onClose}
-          className="w-full max-w-xs py-4 rounded-xl font-bold text-lg bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all"
+          className="w-full max-w-xs py-3 rounded-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white transition-all"
         >
           Start Sharing 👁️
         </button>
