@@ -973,10 +973,9 @@ function MiniAppExperience() {
               </div>
             )}
 
-            {featuredCollab && hasProfile && address && (
+            {featuredCollab && hasProfile && (
               <CollaborationBanner 
                 collaboration={featuredCollab} 
-                walletAddress={address}
                 onClick={() => setShowCollabModal(true)} 
               />
             )}
