@@ -71,10 +71,26 @@ export function OnboardingModal({ walletAddress, onComplete, farcasterUser }: On
       onComplete();
     } catch (err: any) {
       console.error('Error creating profile:', err);
-      setError(err.message || 'Failed to create profile. Please try again.');
+      const errorMessage = err.message || 'Failed to create profile. Please try again.';
+      
+      // If profile already exists, just complete the onboarding
+      if (errorMessage.toLowerCase().includes('already exists') || 
+          errorMessage.toLowerCase().includes('duplicate') ||
+          errorMessage.toLowerCase().includes('unique constraint')) {
+        console.log('Profile already exists, completing onboarding...');
+        onComplete();
+        return;
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Handle the "Continue anyway" for existing profiles
+  const handleContinueAnyway = () => {
+    onComplete();
   };
 
   return (
@@ -182,8 +198,17 @@ export function OnboardingModal({ walletAddress, onComplete, farcasterUser }: On
 
           {/* Error Message */}
           {error && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-sm text-red-400">
-              {error}
+            <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+              <p className="text-sm text-red-400 mb-2">{error}</p>
+              {error.toLowerCase().includes('already exists') && (
+                <button
+                  type="button"
+                  onClick={handleContinueAnyway}
+                  className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors text-sm"
+                >
+                  Continue to App →
+                </button>
+              )}
             </div>
           )}
 
