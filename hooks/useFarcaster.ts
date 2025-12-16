@@ -25,16 +25,18 @@ export function useFarcaster() {
 
   const connectWallet = useCallback(async (): Promise<string | null> => {
     try {
-      setConnectionMessage('Requesting wallet access...');
-      setConnectionState('awaiting-confirmation');
-      
       const provider = sdk.wallet.ethProvider;
       
       // This call may require mobile confirmation for new wallets
-      // Give it a longer timeout since user may need to switch apps
       const accountsPromise = provider.request({ 
         method: 'eth_requestAccounts' 
       }) as Promise<string[]>;
+      
+      // After 4 seconds, show mobile confirmation hint (only if still waiting)
+      const hintTimeout = setTimeout(() => {
+        setConnectionState('awaiting-confirmation');
+        setConnectionMessage('Check Warpcast mobile app to approve wallet access...');
+      }, 4000);
       
       // 45 second timeout for wallet confirmation (user may need to switch to mobile app)
       const timeoutPromise = new Promise<null>((_, reject) => 
@@ -42,6 +44,9 @@ export function useFarcaster() {
       );
       
       const accounts = await Promise.race([accountsPromise, timeoutPromise]) as string[] | null;
+      
+      // Clear the hint timeout if we got a response
+      clearTimeout(hintTimeout);
       
       return accounts?.[0] || null;
     } catch (error: any) {
@@ -101,14 +106,6 @@ export function useFarcaster() {
 
         // Try to connect wallet
         setConnectionMessage('Connecting to Warplet...');
-        
-        // Check if we might need mobile confirmation
-        // Show a helpful message
-        setTimeout(() => {
-          if (connectionState === 'awaiting-confirmation') {
-            setConnectionMessage('Check Warpcast mobile app to approve wallet access...');
-          }
-        }, 3000);
         
         const address = await connectWallet();
         
