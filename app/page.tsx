@@ -27,6 +27,23 @@ import {
 export const dynamic = 'force-dynamic';
 
 // ============================================
+// NOTIFICATION TOAST COMPONENT
+// ============================================
+
+function NotificationToast({ message, type, onClose }: { message: string; type: 'success' | 'error' | 'info'; onClose: () => void }) {
+  const bgColor = type === 'success' ? 'bg-green-500/90' : type === 'error' ? 'bg-red-500/90' : 'bg-purple-500/90';
+  const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
+  
+  return (
+    <div className={`fixed top-20 left-1/2 transform -translate-x-1/2 z-[100] ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-fade-in max-w-sm`}>
+      <span className="text-lg">{icon}</span>
+      <span className="text-sm">{message}</span>
+      <button onClick={onClose} className="ml-2 text-white/70 hover:text-white">✕</button>
+    </div>
+  );
+}
+
+// ============================================
 // SPLASH PAGE COMPONENTS (for web visitors)
 // ============================================
 
@@ -108,7 +125,6 @@ function SplashExperience() {
       
     } catch (error) {
       console.error('Error transmitting:', error);
-      alert('The Eye is temporarily blinded. Try again soon.');
     } finally {
       setIsSubmitting(false);
     }
@@ -352,9 +368,13 @@ function MiniAppExperience() {
     isInMiniApp, 
     farcasterUser,
     connectionState,
+    connectionMessage,
     retry,
     sendContractTransaction,
     openUrl,
+    showNotification,
+    notification,
+    clearNotification,
     isPending,
     isConfirming,
     isConfirmed,
@@ -369,7 +389,6 @@ function MiniAppExperience() {
   const [showCollabModal, setShowCollabModal] = useState(false);
   const [collabBonusEarned, setCollabBonusEarned] = useState<{ amount: number; symbol: string } | null>(null);
   
-  // Auto-show collab modal when user has profile + active collab + hasn't seen it this session
   useEffect(() => {
     if (hasProfile && featuredCollab && !collabIntroSeen && !profileLoading) {
       setShowCollabModal(true);
@@ -429,7 +448,6 @@ function MiniAppExperience() {
       
       setOpenRankChecking(true);
       try {
-        // Pass power badge status - verified accounts bypass graph check
         const result = await checkOpenRank(farcasterUser.fid, (farcasterUser as any).powerBadge);
         setOpenRankEligible(result.eligible);
         if (!result.eligible) {
@@ -503,13 +521,17 @@ function MiniAppExperience() {
     async function loadUserData() {
       if (!address || !hasProfile) return;
       
-      const [profile, stats] = await Promise.all([
-        getUserProfile(address),
-        getUserStats(address)
-      ]);
-      
-      setUserProfile(profile);
-      setUserStats(stats);
+      try {
+        const [profile, stats] = await Promise.all([
+          getUserProfile(address),
+          getUserStats(address)
+        ]);
+        
+        setUserProfile(profile);
+        setUserStats(stats);
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      }
     }
     
     if (isConnected && hasProfile) {
@@ -631,7 +653,7 @@ function MiniAppExperience() {
     if (!isConnected || !address || !message.trim()) return;
     
     if (!canShareState) {
-      alert(`Please wait! Next share available in ${shareCooldown}`);
+      showNotification(`Please wait! Next share available in ${shareCooldown}`, 'error');
       return;
     }
     
@@ -652,7 +674,7 @@ function MiniAppExperience() {
     if (!address || !message.trim()) return;
     
     if (!canConfess) {
-      alert('Please wait for the cooldown period to end');
+      showNotification('Please wait for the cooldown period to end', 'error');
       return;
     }
     
@@ -662,7 +684,7 @@ function MiniAppExperience() {
       const result = await recordConfession(address, message);
       
       if (!result.success) {
-        alert(result.error || 'Failed to post confession');
+        showNotification(result.error || 'Failed to post confession', 'error');
         setIsSharing(false);
         return;
       }
@@ -670,6 +692,7 @@ function MiniAppExperience() {
       setMessage('');
       setIsGlowing(false);
       setShowSuccess(true);
+      showNotification('Confession posted! 🤫', 'success');
       
       const [stats, newInteractions] = await Promise.all([
         getUserStats(address),
@@ -688,7 +711,7 @@ function MiniAppExperience() {
       setTimeout(() => setShowSuccess(false), 5000);
     } catch (error: any) {
       console.error('Error posting confession:', error);
-      alert('Failed to post confession');
+      showNotification('Failed to post confession', 'error');
     } finally {
       setIsSharing(false);
     }
@@ -698,7 +721,7 @@ function MiniAppExperience() {
     if (!address || !selectedPlatform) return;
     
     if (!openRankEligible) {
-      alert('Your account is not eligible for token rewards yet. DM @flexasaurusrex on Warpcast to appeal! You can still share and earn points.');
+      showNotification('Your account is not eligible for token rewards yet. DM @flexasaurusrex on Warpcast to appeal!', 'error');
       setShowShareConfirm(false);
       setSelectedPlatform(null);
       return;
@@ -719,7 +742,7 @@ function MiniAppExperience() {
       );
       
       if (!interactionResult.success) {
-        alert(interactionResult.error || 'You must wait before sharing again!');
+        showNotification(interactionResult.error || 'You must wait before sharing again!', 'error');
         setIsSharing(false);
         setSelectedPlatform(null);
         return;
@@ -744,7 +767,6 @@ function MiniAppExperience() {
         setClaimedRewards(formattedRewards);
       }
       
-      // Check and award collaboration bonus
       const collabResult = await checkCollabEligibility(address);
       if (collabResult.eligible && collabResult.collaboration) {
         await markCollabClaimed(
@@ -761,6 +783,7 @@ function MiniAppExperience() {
       setMessage('');
       setPendingMessage('');
       setIsGlowing(false);
+      showNotification('Rewards claimed successfully! 🎁', 'success');
       
       if (address) {
         const [stats, newInteractions, shareCheck] = await Promise.all([
@@ -778,11 +801,11 @@ function MiniAppExperience() {
     } catch (error: any) {
       console.error('Error claiming:', error);
       if (error?.message?.includes('user rejected')) {
-        alert('Transaction cancelled. You can try again!');
+        showNotification('Transaction cancelled. You can try again!', 'info');
       } else if (error?.message?.includes('Cooldown')) {
-        alert('You must wait before claiming again!');
+        showNotification('You must wait before claiming again!', 'error');
       } else {
-        alert(`Error: ${error?.shortMessage || error?.message || 'Unknown error'}`);
+        showNotification(`Error: ${error?.shortMessage || error?.message || 'Unknown error'}`, 'error');
       }
     } finally {
       setIsSharing(false);
@@ -800,39 +823,46 @@ function MiniAppExperience() {
   async function handleDeleteInteraction(interactionId: string) {
     if (!address || !isAdmin) return;
 
-    if (!confirm('Are you sure you want to delete this Feylon? This cannot be undone.')) {
-      return;
-    }
-
     setDeletingId(interactionId);
 
     try {
       const result = await deleteInteraction(interactionId, address);
       
       if (!result.success) {
-        alert(result.error || 'Failed to delete interaction');
+        showNotification(result.error || 'Failed to delete interaction', 'error');
         return;
       }
 
       const newInteractions = await getAllInteractions();
       setInteractions(newInteractions);
+      showNotification('Feylon deleted', 'success');
     } catch (error) {
       console.error('Error deleting interaction:', error);
-      alert('Failed to delete interaction');
+      showNotification('Failed to delete interaction', 'error');
     } finally {
       setDeletingId(null);
     }
   }
 
+  const showUserDropdown = isConnected && hasProfile && (userProfile || farcasterUser);
+
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden relative">
+      {notification && (
+        <NotificationToast 
+          message={notification.message} 
+          type={notification.type} 
+          onClose={clearNotification} 
+        />
+      )}
+
       <FloatingAvatars interactions={interactions} />
 
       <div className="fixed top-4 left-4 z-40 px-3 py-1 bg-purple-600/80 backdrop-blur-sm rounded-full text-xs text-white">
         🟪 Warpcast
       </div>
 
-      {isConnected && hasProfile && userProfile && (
+      {showUserDropdown && (
         <div className="fixed top-4 right-4 z-40">
           <div className="relative">
             <button
@@ -841,12 +871,12 @@ function MiniAppExperience() {
             >
               <Avatar
                 walletAddress={address!}
-                customImageUrl={userProfile.profile_image_url || farcasterUser?.pfpUrl}
+                customImageUrl={userProfile?.profile_image_url || farcasterUser?.pfpUrl}
                 size={32}
               />
               <div className="hidden md:block text-left">
                 <div className="text-sm font-bold text-white">
-                  {userProfile.display_name || farcasterUser?.displayName || farcasterUser?.username}
+                  {userProfile?.display_name || farcasterUser?.displayName || farcasterUser?.username || 'User'}
                 </div>
                 {userStats && (
                   <div className="text-xs text-purple-300">{userStats.total_points} points</div>
@@ -956,15 +986,22 @@ function MiniAppExperience() {
               Connect to share your message of goodwill or make your confession
             </p>
             <div className="text-center">
-              {connectionState === 'connecting' && (
+              {(connectionState === 'connecting' || connectionState === 'awaiting-confirmation') && (
                 <div className="space-y-3">
-                  <div className="text-purple-400 animate-pulse">Connecting to Warplet...</div>
-                  <p className="text-gray-600 text-xs">This may take a few seconds</p>
+                  <div className="text-purple-400 animate-pulse">
+                    {connectionMessage || 'Connecting to Warplet...'}
+                  </div>
+                  {connectionState === 'awaiting-confirmation' && (
+                    <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-4 max-w-sm mx-auto">
+                      <p className="text-sm text-purple-300 mb-2">📱 Check your Warpcast mobile app</p>
+                      <p className="text-xs text-gray-400">You may need to approve wallet access on your phone</p>
+                    </div>
+                  )}
                 </div>
               )}
               {connectionState === 'failed' && (
                 <div className="space-y-3">
-                  <div className="text-red-400">Connection failed</div>
+                  <div className="text-red-400">{connectionMessage || 'Connection failed'}</div>
                   <button
                     onClick={retry}
                     className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
