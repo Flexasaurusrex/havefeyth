@@ -107,7 +107,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const txHash = await provider.request({
           method: 'eth_sendTransaction',
           params: [{
-            from: farcasterAddress,
+            from: farcasterAddress as `0x${string}`,
             to: params.address,
             data: data,
             value: params.value ? `0x${params.value.toString(16)}` : undefined,
