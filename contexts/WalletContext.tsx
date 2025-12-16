@@ -125,7 +125,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           try {
             const receipt = await provider.request({
               method: 'eth_getTransactionReceipt',
-              params: [txHash],
+              params: [txHash as `0x${string}`],
             });
             if (receipt) {
               confirmed = true;
