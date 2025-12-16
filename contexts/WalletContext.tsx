@@ -9,6 +9,7 @@ interface WalletContextType {
   isReady: boolean;
   address: string | null;
   isInMiniApp: boolean;
+  connectionState: 'idle' | 'connecting' | 'connected' | 'failed';
   farcasterUser: {
     fid: number;
     username: string;
@@ -23,6 +24,7 @@ interface WalletContextType {
     value?: bigint;
   }) => Promise<string | null>;
   openUrl: (url: string) => Promise<void>;
+  retry: () => void;
   isPending: boolean;
   isConfirming: boolean;
   isConfirmed: boolean;
@@ -44,11 +46,15 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     isReady: farcasterReady, 
     user: farcasterUser, 
     walletAddress: farcasterAddress,
+    connectionState,
     openUrl,
+    retry,
   } = useFarcaster();
   
-  const isConnected = isInMiniApp ? (!!farcasterAddress || wagmiConnected) : wagmiConnected;
-  const address = isInMiniApp ? (farcasterAddress || wagmiAddress) : wagmiAddress;
+  const isConnected = isInMiniApp 
+    ? (!!farcasterAddress && connectionState === 'connected') 
+    : wagmiConnected;
+  const address = isInMiniApp ? farcasterAddress : wagmiAddress;
   const isReady = farcasterReady;
   
   const sendContractTransaction = useCallback(async (params: {
@@ -79,6 +85,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       isReady,
       address: address || null,
       isInMiniApp,
+      connectionState,
       farcasterUser: farcasterUser ? {
         fid: farcasterUser.fid,
         username: farcasterUser.username,
@@ -87,6 +94,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       } : null,
       sendContractTransaction,
       openUrl,
+      retry,
       isPending,
       isConfirming: wagmiConfirming,
       isConfirmed: wagmiConfirmed,
