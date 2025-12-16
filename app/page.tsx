@@ -351,6 +351,8 @@ function MiniAppExperience() {
     address, 
     isInMiniApp, 
     farcasterUser,
+    connectionState,
+    retry,
     sendContractTransaction,
     openUrl,
     isPending,
@@ -950,9 +952,42 @@ function MiniAppExperience() {
 
         {!isConnected ? (
           <div className="text-center space-y-4 px-4">
-            <p className="text-gray-400 text-base md:text-lg">Connect to share your message of goodwill or make your confession</p>
-            <div className="text-center text-purple-400">
-              <div className="animate-pulse">Connecting to Warplet...</div>
+            <p className="text-gray-400 text-base md:text-lg">
+              Connect to share your message of goodwill or make your confession
+            </p>
+            <div className="text-center">
+              {connectionState === 'connecting' && (
+                <div className="space-y-3">
+                  <div className="text-purple-400 animate-pulse">Connecting to Warplet...</div>
+                  <p className="text-gray-600 text-xs">This may take a few seconds</p>
+                </div>
+              )}
+              {connectionState === 'failed' && (
+                <div className="space-y-3">
+                  <div className="text-red-400">Connection failed</div>
+                  <button
+                    onClick={retry}
+                    className="px-6 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                  >
+                    Tap to Retry
+                  </button>
+                  <p className="text-gray-600 text-xs">If this keeps happening, try closing and reopening the app</p>
+                </div>
+              )}
+              {connectionState === 'idle' && isInMiniApp && (
+                <div className="space-y-3">
+                  <div className="text-gray-500">Waiting for wallet...</div>
+                  <button
+                    onClick={retry}
+                    className="px-6 py-2 bg-purple-600/50 hover:bg-purple-600 text-white rounded-lg transition-colors text-sm"
+                  >
+                    Tap to Connect
+                  </button>
+                </div>
+              )}
+              {connectionState === 'idle' && !isInMiniApp && (
+                <div className="text-gray-500">Loading...</div>
+              )}
             </div>
           </div>
         ) : (
