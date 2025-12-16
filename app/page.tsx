@@ -497,16 +497,16 @@ function MiniAppExperience() {
   }, [isReady, farcasterUser, address, farcasterHandled, refresh]);
 
   useEffect(() => {
-    if (isConnected && !profileLoading && !hasProfile && address && isReady) {
+    if (isConnected && !profileLoading && !hasProfile && !userProfile && address && isReady) {
       setShowOnboarding(true);
     }
-  }, [isConnected, profileLoading, hasProfile, address, isReady]);
+  }, [isConnected, profileLoading, hasProfile, userProfile, address, isReady]);
 
   useEffect(() => {
-    if (hasProfile && showOnboarding) {
+    if ((hasProfile || userProfile) && showOnboarding) {
       setShowOnboarding(false);
     }
-  }, [hasProfile, showOnboarding]);
+  }, [hasProfile, userProfile, showOnboarding]);
 
   useEffect(() => {
     async function loadInteractions() {
@@ -844,7 +844,7 @@ function MiniAppExperience() {
     }
   }
 
-  const showUserDropdown = isConnected && hasProfile && (userProfile || farcasterUser);
+  const showUserDropdown = isConnected && (hasProfile || userProfile) && (userProfile || farcasterUser);
 
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 md:p-8 overflow-x-hidden relative">
@@ -1053,7 +1053,7 @@ function MiniAppExperience() {
             )}
 
             <div className="space-y-6">
-              {hasProfile && (
+              {(hasProfile || userProfile) && (
                 <div className="flex items-center justify-center gap-3 mb-4">
                   <span className={`text-sm ${!confessionMode ? 'text-white font-bold' : 'text-gray-500'}`}>
                     Social Share (10pts)
@@ -1128,7 +1128,7 @@ function MiniAppExperience() {
               {showSuccess && !showToast && <div className="text-center text-green-500 text-lg animate-fade-in">✓ {confessionMode ? 'Confession posted!' : 'Shared! Processing rewards...'}</div>}
             </div>
 
-            {!hasProfile && (
+            {!hasProfile && !userProfile && (
               <div className="text-center space-y-2">
                 <p className="text-gray-500 text-sm">
                   {farcasterUser 
