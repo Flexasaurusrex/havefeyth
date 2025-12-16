@@ -12,7 +12,7 @@ interface FarcasterUser {
   verifiedAddresses: string[];
 }
 
-type ConnectionState = 'idle' | 'connecting' | 'connected' | 'failed';
+type ConnectionState = 'idle' | 'connecting' | 'awaiting-confirmation' | 'connected' | 'failed';
 
 export function useFarcaster() {
   const [isInMiniApp, setIsInMiniApp] = useState(false);
@@ -20,18 +20,40 @@ export function useFarcaster() {
   const [user, setUser] = useState<FarcasterUser | null>(null);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle');
+  const [connectionMessage, setConnectionMessage] = useState<string>('');
   const [retryCount, setRetryCount] = useState(0);
 
   const connectWallet = useCallback(async (): Promise<string | null> => {
     try {
+      setConnectionMessage('Requesting wallet access...');
+      setConnectionState('awaiting-confirmation');
+      
       const provider = sdk.wallet.ethProvider;
-      const accounts = await provider.request({ 
+      
+      // This call may require mobile confirmation for new wallets
+      // Give it a longer timeout since user may need to switch apps
+      const accountsPromise = provider.request({ 
         method: 'eth_requestAccounts' 
-      }) as string[];
+      }) as Promise<string[]>;
+      
+      // 45 second timeout for wallet confirmation (user may need to switch to mobile app)
+      const timeoutPromise = new Promise<null>((_, reject) => 
+        setTimeout(() => reject(new Error('Wallet confirmation timeout')), 45000)
+      );
+      
+      const accounts = await Promise.race([accountsPromise, timeoutPromise]) as string[] | null;
       
       return accounts?.[0] || null;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Wallet connection error:', error);
+      
+      // Check if it's a user rejection vs timeout
+      if (error?.message?.includes('rejected') || error?.message?.includes('denied')) {
+        setConnectionMessage('Wallet access denied. Please approve in Warpcast.');
+      } else if (error?.message?.includes('timeout')) {
+        setConnectionMessage('Wallet confirmation timed out. Check your Warpcast app and try again.');
+      }
+      
       return null;
     }
   }, []);
@@ -43,20 +65,22 @@ export function useFarcaster() {
     }
 
     setConnectionState('connecting');
+    setConnectionMessage('Initializing...');
 
     try {
-      // Add timeout to sdk.context - this is where it hangs!
+      // Add timeout to sdk.context
       const contextPromise = sdk.context;
       const timeoutPromise = new Promise<null>((_, reject) => 
-        setTimeout(() => reject(new Error('SDK context timeout')), 8000)
+        setTimeout(() => reject(new Error('SDK context timeout')), 10000)
       );
 
       let context;
       try {
         context = await Promise.race([contextPromise, timeoutPromise]);
       } catch (timeoutError) {
-        console.warn('SDK context timed out, retrying...');
+        console.warn('SDK context timed out');
         setConnectionState('failed');
+        setConnectionMessage('Connection timed out. Tap to retry.');
         setIsReady(true);
         return;
       }
@@ -75,17 +99,23 @@ export function useFarcaster() {
           verifiedAddresses: u.verifiedAddresses?.ethAddresses || u.verified_addresses?.eth_addresses || [],
         });
 
-        // Actually connect to Warplet wallet with timeout
-        const walletPromise = connectWallet();
-        const walletTimeoutPromise = new Promise<null>((resolve) => 
-          setTimeout(() => resolve(null), 6000)
-        );
-
-        const address = await Promise.race([walletPromise, walletTimeoutPromise]);
+        // Try to connect wallet
+        setConnectionMessage('Connecting to Warplet...');
+        
+        // Check if we might need mobile confirmation
+        // Show a helpful message
+        setTimeout(() => {
+          if (connectionState === 'awaiting-confirmation') {
+            setConnectionMessage('Check Warpcast mobile app to approve wallet access...');
+          }
+        }, 3000);
+        
+        const address = await connectWallet();
         
         if (address) {
           setWalletAddress(address);
           setConnectionState('connected');
+          setConnectionMessage('');
         } else {
           // Fallback to verified address or custody address
           const fallbackAddress = u.verifiedAddresses?.ethAddresses?.[0] 
@@ -94,10 +124,13 @@ export function useFarcaster() {
             || u.custody_address;
           
           if (fallbackAddress) {
+            console.log('Using fallback address:', fallbackAddress);
             setWalletAddress(fallbackAddress);
             setConnectionState('connected');
+            setConnectionMessage('');
           } else {
             setConnectionState('failed');
+            setConnectionMessage('Wallet connection failed. Tap to retry.');
           }
         }
 
@@ -110,12 +143,14 @@ export function useFarcaster() {
       } else {
         // Not in mini app
         setConnectionState('idle');
+        setConnectionMessage('');
       }
 
       setIsReady(true);
     } catch (error) {
       console.log('Farcaster init error:', error);
       setConnectionState('failed');
+      setConnectionMessage('Connection error. Tap to retry.');
       setIsReady(true);
     }
   }, [connectWallet]);
@@ -127,13 +162,16 @@ export function useFarcaster() {
 
   // Retry mechanism
   const retry = useCallback(() => {
-    if (retryCount < 3) {
+    if (retryCount < 5) {
       setRetryCount(prev => prev + 1);
       setIsReady(false);
       setConnectionState('connecting');
+      setConnectionMessage('Retrying connection...');
       initFarcaster();
     } else {
-      // After 3 retries, try a full reload
+      // After 5 retries, suggest a full reload
+      setConnectionMessage('Multiple attempts failed. Try closing and reopening the app.');
+      // Still allow one more try via reload
       window.location.reload();
     }
   }, [retryCount, initFarcaster]);
@@ -157,6 +195,7 @@ export function useFarcaster() {
     user,
     walletAddress,
     connectionState,
+    connectionMessage,
     openUrl,
     retry,
   };
