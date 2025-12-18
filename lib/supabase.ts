@@ -236,7 +236,7 @@ export async function recordInteraction(
           message,
           shared_platform: platform,
           share_url: shareUrl,
-          claimed: true,
+          claimed: false, // ← FIXED: Start as false, update to true after blockchain claim
           display_name: displayName,
           twitter_handle: twitterHandle,
           farcaster_handle: farcasterHandle,
@@ -255,6 +255,51 @@ export async function recordInteraction(
   } catch (error) {
     console.error('Error recording interaction:', error);
     return { points: 0, success: false, error: 'Failed to record interaction' };
+  }
+}
+
+// NEW FUNCTION: Mark interaction as claimed after successful blockchain transaction
+export async function markInteractionAsClaimed(
+  walletAddress: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!isConfigured()) {
+    console.log('Supabase not configured, skipping claim update');
+    return { success: false };
+  }
+
+  try {
+    // Find the most recent unclaimed interaction for this wallet
+    const { data: interaction, error: fetchError } = await supabase
+      .from('interactions')
+      .select('id')
+      .eq('wallet_address', walletAddress.toLowerCase())
+      .eq('claimed', false)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (fetchError) {
+      console.error('Error fetching interaction:', fetchError);
+      return { success: false, error: 'Interaction not found' };
+    }
+
+    if (!interaction) {
+      return { success: false, error: 'No unclaimed interaction found' };
+    }
+
+    // Update the interaction to claimed
+    const { error: updateError } = await supabase
+      .from('interactions')
+      .update({ claimed: true })
+      .eq('id', interaction.id);
+
+    if (updateError) throw updateError;
+
+    console.log(`✅ Marked interaction as claimed for ${walletAddress}`);
+    return { success: true };
+  } catch (error) {
+    console.error('Error marking interaction as claimed:', error);
+    return { success: false, error: 'Failed to update claim status' };
   }
 }
 
@@ -363,7 +408,7 @@ export async function recordConfession(
           message,
           shared_platform: 'twitter',
           share_url: '',
-          claimed: true,
+          claimed: false, // ← FIXED: Confessions also start as unclaimed
           is_confession: true,
         },
       ]);
@@ -511,18 +556,54 @@ export async function getAllInteractions(): Promise<Interaction[]> {
   if (!isConfigured()) return [];
 
   try {
+    // Get ALL interactions without limit for accurate stats
     const { data, error } = await supabase
       .from('interactions')
       .select('*')
-      .eq('claimed', true)
-      .order('created_at', { ascending: false })
-      .limit(50);
+      .order('created_at', { ascending: false });
+    // Note: Supabase has a max response size, but should handle thousands of records
+    // If you have 10,000+ interactions, consider pagination instead
 
     if (error) throw error;
     return data || [];
   } catch (error) {
     console.error('Error fetching interactions:', error);
     return [];
+  }
+}
+
+// NEW: Get interaction counts without fetching all data (more efficient)
+export async function getInteractionCounts(): Promise<{
+  totalInteractions: number;
+  totalClaims: number;
+  totalShares: number;
+}> {
+  if (!isConfigured()) {
+    return { totalInteractions: 0, totalClaims: 0, totalShares: 0 };
+  }
+
+  try {
+    // Count total interactions
+    const { count: totalInteractions } = await supabase
+      .from('interactions')
+      .select('*', { count: 'exact', head: true });
+
+    // Count claimed interactions
+    const { count: totalClaims } = await supabase
+      .from('interactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('claimed', true);
+
+    const totalShares = (totalInteractions || 0) - (totalClaims || 0);
+
+    return {
+      totalInteractions: totalInteractions || 0,
+      totalClaims: totalClaims || 0,
+      totalShares,
+    };
+  } catch (error) {
+    console.error('Error fetching interaction counts:', error);
+    return { totalInteractions: 0, totalClaims: 0, totalShares: 0 };
   }
 }
 
