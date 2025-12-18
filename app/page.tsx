@@ -440,6 +440,9 @@ function MiniAppExperience() {
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
     functionName: 'previewClaim',
     args: address ? [address as `0x${string}`] : undefined,
+    query: {
+      enabled: !!address && isConnected, // Only run when wallet is connected
+    },
   });
 
   useEffect(() => {
