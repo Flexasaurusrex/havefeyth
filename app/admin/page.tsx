@@ -108,16 +108,22 @@ export default function AdminPage() {
   useEffect(() => {
     async function loadData() {
       setIsLoading(true);
+      
+      // Get accurate counts using COUNT queries (efficient for large datasets)
+      const { getInteractionCounts } = await import('@/lib/supabase');
+      const counts = await getInteractionCounts();
+      
+      // Get recent interactions for display (limited to 100 for performance)
       const data = await getAllInteractions();
-      setInteractions(data);
+      const recentInteractions = data.slice(0, 100); // Only take first 100 for display
+      setInteractions(recentInteractions);
       
       const uniqueUsers = new Set(data.map(i => i.wallet_address)).size;
-      const totalClaimed = data.filter(i => i.claimed).length;
       
       setStats({
-        totalInteractions: data.length,
+        totalInteractions: counts.totalInteractions,
         uniqueUsers,
-        totalClaimed,
+        totalClaimed: counts.totalClaims,
       });
 
       // Load transmissions
@@ -995,23 +1001,37 @@ function ActivityTab({ interactions, activityFilter, setActivityFilter, stats }:
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 rounded-lg p-4">
           <div className="text-sm text-gray-400 mb-1">Total Claims</div>
-          <div className="text-3xl font-bold text-green-400">{interactions.filter((i: Interaction) => i.claimed).length}</div>
+          <div className="text-3xl font-bold text-green-400">{stats.totalClaimed}</div>
+          <div className="text-xs text-gray-500 mt-1">All time</div>
         </div>
         <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 rounded-lg p-4">
           <div className="text-sm text-gray-400 mb-1">Total Shares</div>
-          <div className="text-3xl font-bold text-blue-400">{interactions.length}</div>
+          <div className="text-3xl font-bold text-blue-400">{stats.totalInteractions - stats.totalClaimed}</div>
+          <div className="text-xs text-gray-500 mt-1">All time</div>
         </div>
         <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-lg p-4">
-          <div className="text-sm text-gray-400 mb-1">Unique Wallets</div>
-          <div className="text-3xl font-bold text-purple-400">{stats.uniqueUsers}</div>
+          <div className="text-sm text-gray-400 mb-1">Total Interactions</div>
+          <div className="text-3xl font-bold text-purple-400">{stats.totalInteractions}</div>
+          <div className="text-xs text-gray-500 mt-1">All shares + claims</div>
         </div>
         <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-lg p-4">
           <div className="text-sm text-gray-400 mb-1">Claim Rate</div>
           <div className="text-3xl font-bold text-orange-400">
-            {interactions.length > 0 
-              ? Math.round((interactions.filter((i: Interaction) => i.claimed).length / interactions.length) * 100)
+            {stats.totalInteractions > 0 
+              ? Math.round((stats.totalClaimed / stats.totalInteractions) * 100)
               : 0}%
           </div>
+          <div className="text-xs text-gray-500 mt-1">Conversion rate</div>
+        </div>
+      </div>
+
+      {/* Note about table limit */}
+      <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-3">
+        <div className="flex items-center gap-2 text-sm">
+          <span>💡</span>
+          <span className="text-gray-300">
+            <strong>Note:</strong> Stats above show ALL {stats.totalInteractions} interactions. Table below shows most recent 100 for performance.
+          </span>
         </div>
       </div>
 
@@ -1062,7 +1082,7 @@ function ActivityTab({ interactions, activityFilter, setActivityFilter, stats }:
               : 'bg-white/10 hover:bg-white/20 text-gray-300'
           }`}
         >
-          📊 All ({interactions.length})
+          📊 All ({stats.totalInteractions})
         </button>
         <button
           onClick={() => setActivityFilter('claims')}
@@ -1072,7 +1092,7 @@ function ActivityTab({ interactions, activityFilter, setActivityFilter, stats }:
               : 'bg-white/10 hover:bg-white/20 text-gray-300'
           }`}
         >
-          🎁 Claims ({interactions.filter((i: Interaction) => i.claimed).length})
+          🎁 Claims ({stats.totalClaimed})
         </button>
         <button
           onClick={() => setActivityFilter('shares')}
@@ -1082,12 +1102,17 @@ function ActivityTab({ interactions, activityFilter, setActivityFilter, stats }:
               : 'bg-white/10 hover:bg-white/20 text-gray-300'
           }`}
         >
-          💬 Shares ({interactions.filter((i: Interaction) => !i.claimed).length})
+          💬 Shares ({stats.totalInteractions - stats.totalClaimed})
         </button>
       </div>
 
       {/* Activity Table */}
       <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 overflow-hidden">
+        <div className="p-4 bg-black/30 border-b border-white/10 flex items-center justify-between">
+          <div className="text-sm text-gray-400">
+            Showing most recent {Math.min(interactions.length, 100)} of {stats.totalInteractions} total interactions
+          </div>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-left text-gray-400 bg-black/30">
