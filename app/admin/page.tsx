@@ -650,7 +650,7 @@ function RewardsTab({ allRewards, refetchRewards, distributionMode, newReward, s
                         </div>
                       </div>
                       <div className="text-sm text-gray-300 mb-1">
-                        💰 {formatEther(reward.amount)} per claim
+                        💰 {reward.rewardType === 0 ? formatEther(reward.amount) : reward.amount.toString()} per claim
                       </div>
                       <div className="text-xs text-gray-500 font-mono mb-1">
                         {reward.tokenAddress.slice(0, 10)}...{reward.tokenAddress.slice(-8)}
