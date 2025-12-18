@@ -979,7 +979,7 @@ function ActivityTab({ interactions, activityFilter, setActivityFilter, stats }:
           </button>
           <button
             onClick={() => {
-              const uniqueAddresses = [...new Set(interactions.map((i: Interaction) => i.wallet_address))];
+              const uniqueAddresses = Array.from(new Set(interactions.map((i: Interaction) => i.wallet_address)));
               const addressList = uniqueAddresses.join('\n');
               navigator.clipboard.writeText(addressList);
               alert(`✅ Copied ${uniqueAddresses.length} unique wallet addresses!`);
@@ -1028,13 +1028,13 @@ function ActivityTab({ interactions, activityFilter, setActivityFilter, stats }:
               <div className="flex gap-2 flex-wrap">
                 <button
                   onClick={() => {
-                    const uniqueAddresses = [...new Set(interactions.map((i: Interaction) => i.wallet_address))];
+                    const uniqueAddresses = Array.from(new Set(interactions.map((i: Interaction) => i.wallet_address)));
                     navigator.clipboard.writeText(uniqueAddresses.join('\n'));
                     alert(`✅ Copied ${uniqueAddresses.length} unique addresses!`);
                   }}
                   className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 rounded text-xs font-medium transition-colors"
                 >
-                  📋 Copy Unique ({[...new Set(interactions.map((i: Interaction) => i.wallet_address))].length})
+                  📋 Copy Unique ({Array.from(new Set(interactions.map((i: Interaction) => i.wallet_address))).length})
                 </button>
                 <button
                   onClick={() => {
