@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import Image from 'next/image';
-import { recordInteraction, getAllInteractions, getUserProfile, getUserStats, canUserConfess, canUserShare, recordConfession, deleteInteraction, findUserProfile, linkFidToProfile, supabase } from '@/lib/supabase';
+import { recordInteraction, getAllInteractions, getUserProfile, getUserStats, canUserConfess, canUserShare, recordConfession, deleteInteraction, findUserProfile, linkFidToProfile, supabase, markInteractionAsClaimed } from '@/lib/supabase';
 import type { Interaction, UserProfile, UserStats } from '@/lib/supabase';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI } from '@/lib/contract';
 import { RewardToast, type RewardItem } from '@/components/RewardToast';
@@ -753,6 +753,12 @@ function MiniAppExperience() {
         abi: HAVE_FEYTH_MULTI_REWARD_ABI,
         functionName: 'claimReward',
       });
+
+      // 🆕 MARK INTERACTION AS CLAIMED IN DATABASE
+      if (address) {
+        await markInteractionAsClaimed(address);
+        console.log('✅ Interaction marked as claimed in database');
+      }
       
       if (previewRewards && Array.isArray(previewRewards)) {
         const formattedRewards: RewardItem[] = previewRewards.map((reward: any) => ({
