@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI, RewardType, DistributionMode } from '@/lib/contract';
 import { getAllInteractions, supabase } from '@/lib/supabase';
 import type { Interaction } from '@/lib/supabase';
-import { formatEther, parseEther } from 'viem';
+import { formatEther, parseEther, getAddress } from 'viem';
 
 export const dynamic = 'force-dynamic';
 
@@ -385,16 +385,22 @@ function RewardsTab({ allRewards, refetchRewards, distributionMode, newReward, s
         finalAmount = parseEther(newReward.amount).toString();
       }
 
+      // Validate and checksum the address
+      const checksummedAddress = getAddress(newReward.tokenAddress);
+
+      // Always ensure weight has a value (use default 50 if not set)
+      const finalWeight = newReward.weight || '50';
+
       await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_MULTI_REWARD_ABI,
         functionName: 'addReward',
         args: [
-          newReward.tokenAddress as `0x${string}`,
+          checksummedAddress as `0x${string}`,
           Number(newReward.rewardType),
           BigInt(finalAmount),
           BigInt(newReward.tokenId),
-          BigInt(newReward.weight),
+          BigInt(finalWeight),
           newReward.name,
           newReward.symbol,
         ],
@@ -429,9 +435,10 @@ function RewardsTab({ allRewards, refetchRewards, distributionMode, newReward, s
     setIsUpdating(true);
     try {
       const amountInWei = parseEther(fundingInput.amount);
+      const checksummedAddress = getAddress(fundingInput.tokenAddress);
 
       await writeContractAsync({
-        address: fundingInput.tokenAddress as `0x${string}`,
+        address: checksummedAddress as `0x${string}`,
         abi: ERC20_TRANSFER_ABI,
         functionName: 'transfer',
         args: [CONTRACT_ADDRESS, amountInWei],
