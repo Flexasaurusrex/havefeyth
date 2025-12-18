@@ -211,7 +211,8 @@ export async function recordInteraction(
   shareUrl: string,
   displayName?: string,
   twitterHandle?: string,
-  farcasterHandle?: string
+  farcasterHandle?: string,
+  profileImageUrl?: string
 ): Promise<{ points: number; success?: boolean; error?: string }> {
   if (!isConfigured()) {
     console.log('Supabase not configured, skipping interaction record');
@@ -240,6 +241,7 @@ export async function recordInteraction(
           display_name: displayName,
           twitter_handle: twitterHandle,
           farcaster_handle: farcasterHandle,
+          profile_image_url: profileImageUrl,
           is_confession: false,
         },
       ]);
@@ -556,54 +558,18 @@ export async function getAllInteractions(): Promise<Interaction[]> {
   if (!isConfigured()) return [];
 
   try {
-    // Get ALL interactions without limit for accurate stats
+    // FIXED: Get ALL interactions, not just claimed ones
     const { data, error } = await supabase
       .from('interactions')
       .select('*')
-      .order('created_at', { ascending: false });
-    // Note: Supabase has a max response size, but should handle thousands of records
-    // If you have 10,000+ interactions, consider pagination instead
+      .order('created_at', { ascending: false })
+      .limit(100); // Increased limit
 
     if (error) throw error;
     return data || [];
   } catch (error) {
     console.error('Error fetching interactions:', error);
     return [];
-  }
-}
-
-// NEW: Get interaction counts without fetching all data (more efficient)
-export async function getInteractionCounts(): Promise<{
-  totalInteractions: number;
-  totalClaims: number;
-  totalShares: number;
-}> {
-  if (!isConfigured()) {
-    return { totalInteractions: 0, totalClaims: 0, totalShares: 0 };
-  }
-
-  try {
-    // Count total interactions
-    const { count: totalInteractions } = await supabase
-      .from('interactions')
-      .select('*', { count: 'exact', head: true });
-
-    // Count claimed interactions
-    const { count: totalClaims } = await supabase
-      .from('interactions')
-      .select('*', { count: 'exact', head: true })
-      .eq('claimed', true);
-
-    const totalShares = (totalInteractions || 0) - (totalClaims || 0);
-
-    return {
-      totalInteractions: totalInteractions || 0,
-      totalClaims: totalClaims || 0,
-      totalShares,
-    };
-  } catch (error) {
-    console.error('Error fetching interaction counts:', error);
-    return { totalInteractions: 0, totalClaims: 0, totalShares: 0 };
   }
 }
 
