@@ -24,27 +24,19 @@ const ERC20_TRANSFER_ABI = [
   }
 ] as const;
 
-type WizardStep = 1 | 2 | 3;
+type AdminTab = 'dashboard' | 'rewards' | 'settings' | 'activity' | 'transmissions';
 
 export default function AdminPage() {
   const router = useRouter();
-  const { address, isConnected, isConnecting } = useAccount();
+  const { address, isConnected } = useAccount();
   const { writeContractAsync } = useWriteContract();
   
-  const [currentStep, setCurrentStep] = useState<WizardStep>(1);
+  const [activeTab, setActiveTab] = useState<AdminTab>('dashboard');
   const [isUpdating, setIsUpdating] = useState(false);
   const [interactions, setInteractions] = useState<Interaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalInteractions: 0,
-    uniqueUsers: 0,
-    totalClaimed: 0,
-  });
-  
   const [activityFilter, setActivityFilter] = useState<'all' | 'claims' | 'shares'>('all');
   const [transmissions, setTransmissions] = useState<any[]>([]);
-  const [blockchainClaims, setBlockchainClaims] = useState<any[]>([]);
-  const [combinedActivity, setCombinedActivity] = useState<any[]>([]);
   
   const [newReward, setNewReward] = useState({
     tokenAddress: '',
@@ -104,141 +96,293 @@ export default function AdminPage() {
     functionName: 'maxLifetimeClaimsPerUser',
   });
 
-  const { data: maxClaimsPerHour } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-    functionName: 'maxClaimsPerHour',
-  });
-
-  const { data: whitelistEnabled } = useReadContract({
-    address: CONTRACT_ADDRESS,
-    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-    functionName: 'whitelistEnabled',
-  });
-
   const { data: allRewards, refetch: refetchRewards } = useReadContract({
     address: CONTRACT_ADDRESS,
     abi: HAVE_FEYTH_MULTI_REWARD_ABI,
     functionName: 'getAllRewards',
   });
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-      if (!isConnecting && !isConnected) {
-        router.push('/');
-      }
-    }, 1000);
+  const isOwner = address && owner && address.toLowerCase() === (owner as string).toLowerCase();
 
-    return () => clearTimeout(timer);
-  }, [isConnected, isConnecting, router]);
-
+  // Load interactions and stats
   useEffect(() => {
     async function loadData() {
+      setIsLoading(true);
       const data = await getAllInteractions();
       setInteractions(data);
       
       const uniqueUsers = new Set(data.map(i => i.wallet_address)).size;
-      const claimed = data.filter(i => i.claimed).length;
+      const totalClaimed = data.filter(i => i.claimed).length;
       
       setStats({
         totalInteractions: data.length,
         uniqueUsers,
-        totalClaimed: claimed,
+        totalClaimed,
       });
+
+      // Load transmissions
+      const { data: transmissionsData } = await supabase
+        .from('transmissions')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      setTransmissions(transmissionsData || []);
+      setIsLoading(false);
     }
     
     loadData();
-    const interval = setInterval(loadData, 10000);
-    
-    return () => clearInterval(interval);
   }, []);
 
-  // Load transmissions from landing page
-  useEffect(() => {
-    async function loadTransmissions() {
-      const { data, error } = await supabase
-        .from('transmissions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50);
-      
-      if (!error && data) {
-        setTransmissions(data);
-      }
+  const [stats, setStats] = useState({
+    totalInteractions: 0,
+    uniqueUsers: 0,
+    totalClaimed: 0,
+  });
+
+  // Auth check
+  if (!isConnected) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-indigo-900 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="text-6xl mb-4">🔐</div>
+          <h1 className="text-3xl font-bold mb-4">Connect Wallet</h1>
+          <p className="text-gray-400">Connect your wallet to access the admin panel</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isOwner && owner) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-indigo-900 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="text-6xl mb-4">⛔</div>
+          <h1 className="text-3xl font-bold mb-4">Access Denied</h1>
+          <p className="text-gray-400 mb-4">Only the contract owner can access this page</p>
+          <p className="text-xs text-gray-500 font-mono mb-4">Owner: {owner as string}</p>
+          <button
+            onClick={() => router.push('/')}
+            className="px-6 py-3 bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+          >
+            ← Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const tabs: { id: AdminTab; label: string; icon: string }[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'rewards', label: 'Rewards', icon: '🎁' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
+    { id: 'activity', label: 'Activity', icon: '📈' },
+    { id: 'transmissions', label: 'Transmissions', icon: '💬' },
+  ];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-indigo-900 text-white">
+      {/* Header */}
+      <div className="border-b border-white/10 bg-black/30 backdrop-blur-sm sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-3xl">👁️</div>
+              <div>
+                <h1 className="text-2xl font-bold">Feylon Admin</h1>
+                <p className="text-sm text-gray-400">Contract Management</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+                isPaused ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
+              }`}>
+                {isPaused ? '⏸️ Paused' : '▶️ Active'}
+              </div>
+              <button
+                onClick={() => router.push('/')}
+                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
+              >
+                ← Back to App
+              </button>
+            </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="flex gap-2 mt-4 overflow-x-auto">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+                  activeTab === tab.id
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <span className="mr-2">{tab.icon}</span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {activeTab === 'dashboard' && <DashboardTab stats={stats} isPaused={isPaused} distributionMode={distributionMode} allRewards={allRewards} interactions={interactions} />}
+        {activeTab === 'rewards' && <RewardsTab allRewards={allRewards} refetchRewards={refetchRewards} distributionMode={distributionMode} newReward={newReward} setNewReward={setNewReward} writeContractAsync={writeContractAsync} isUpdating={isUpdating} setIsUpdating={setIsUpdating} fundingInput={fundingInput} setFundingInput={setFundingInput} />}
+        {activeTab === 'settings' && <SettingsTab isPaused={isPaused} distributionMode={distributionMode} randomSelectionCount={randomSelectionCount} cooldownPeriod={cooldownPeriod} maxLifetimeClaimsPerUser={maxLifetimeClaimsPerUser} writeContractAsync={writeContractAsync} isUpdating={isUpdating} setIsUpdating={setIsUpdating} />}
+        {activeTab === 'activity' && <ActivityTab interactions={interactions} activityFilter={activityFilter} setActivityFilter={setActivityFilter} stats={stats} />}
+        {activeTab === 'transmissions' && <TransmissionsTab transmissions={transmissions} setTransmissions={setTransmissions} />}
+      </div>
+    </div>
+  );
+}
+
+// ==================== DASHBOARD TAB ====================
+function DashboardTab({ stats, isPaused, distributionMode, allRewards, interactions }: any) {
+  const activeRewardCount = allRewards?.filter((r: any) => r.isActive && r.tokenAddress !== '0x0000000000000000000000000000000000000000').length || 0;
+  
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold mb-2">Dashboard Overview</h2>
+        <p className="text-gray-400">Quick stats and system status</p>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-xl p-6">
+          <div className="text-sm text-gray-400 mb-2">Total Interactions</div>
+          <div className="text-4xl font-bold text-purple-400">{stats.totalInteractions}</div>
+          <div className="text-xs text-gray-500 mt-2">All shares & claims</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-cyan-500/20 to-cyan-600/20 border border-cyan-500/30 rounded-xl p-6">
+          <div className="text-sm text-gray-400 mb-2">Unique Wallets</div>
+          <div className="text-4xl font-bold text-cyan-400">{stats.uniqueUsers}</div>
+          <div className="text-xs text-gray-500 mt-2">Participating users</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 rounded-xl p-6">
+          <div className="text-sm text-gray-400 mb-2">Total Claims</div>
+          <div className="text-4xl font-bold text-green-400">{stats.totalClaimed}</div>
+          <div className="text-xs text-gray-500 mt-2">Successful claims</div>
+        </div>
+
+        <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-xl p-6">
+          <div className="text-sm text-gray-400 mb-2">Active Rewards</div>
+          <div className="text-4xl font-bold text-orange-400">{activeRewardCount}</div>
+          <div className="text-xs text-gray-500 mt-2">Currently claimable</div>
+        </div>
+      </div>
+
+      {/* System Status */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+        <h3 className="text-xl font-bold mb-4">System Status</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="flex items-center justify-between p-4 bg-black/30 rounded-lg">
+            <span className="text-gray-400">Contract State</span>
+            <span className={`px-3 py-1 rounded-lg font-medium ${
+              isPaused ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
+            }`}>
+              {isPaused ? 'Paused' : 'Active'}
+            </span>
+          </div>
+          <div className="flex items-center justify-between p-4 bg-black/30 rounded-lg">
+            <span className="text-gray-400">Distribution Mode</span>
+            <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-lg font-medium">
+              {distributionMode === 0 ? 'All Rewards' : distributionMode === 1 ? 'Random' : 'Weighted'}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent Activity Preview */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold">Recent Activity</h3>
+          <span className="text-sm text-gray-400">Last 5 interactions</span>
+        </div>
+        {interactions.slice(0, 5).length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <div className="text-4xl mb-2">📭</div>
+            <p>No activity yet</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {interactions.slice(0, 5).map((interaction: Interaction) => (
+              <div key={interaction.id} className="flex items-center justify-between p-3 bg-black/30 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    interaction.claimed ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'
+                  }`}>
+                    {interaction.claimed ? '🎁' : '💬'}
+                  </span>
+                  <span className="font-mono text-sm">
+                    {interaction.wallet_address.slice(0, 6)}...{interaction.wallet_address.slice(-4)}
+                  </span>
+                </div>
+                <span className="text-xs text-gray-500">
+                  {new Date(interaction.created_at).toLocaleTimeString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ==================== REWARDS TAB ====================
+function RewardsTab({ allRewards, refetchRewards, distributionMode, newReward, setNewReward, writeContractAsync, isUpdating, setIsUpdating, fundingInput, setFundingInput }: any) {
+  const [showAddForm, setShowAddForm] = useState(false);
+
+  const handleAddReward = async () => {
+    if (!newReward.tokenAddress || !newReward.amount || !newReward.name || !newReward.symbol) {
+      alert('Please fill all required fields');
+      return;
     }
-    
-    loadTransmissions();
-    const interval = setInterval(loadTransmissions, 30000);
-    
-    return () => clearInterval(interval);
-  }, []);
 
-  // Fetch historical blockchain claims
-  useEffect(() => {
-    async function fetchBlockchainClaims() {
-      try {
-        const response = await fetch('https://mainnet.base.org', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            jsonrpc: '2.0',
-            id: 1,
-            method: 'eth_getLogs',
-            params: [{
-              address: CONTRACT_ADDRESS,
-              topics: [
-                // RewardsClaimed event signature
-                '0x' + require('crypto').createHash('sha256').update('RewardsClaimed(address,tuple[],uint256)').digest('hex').slice(0, 64)
-              ],
-              fromBlock: '0x0', // From genesis
-              toBlock: 'latest'
-            }]
-          })
-        });
-        
-        const { result } = await response.json();
-        
-        if (result) {
-          const claims = result.map((log: any) => ({
-            user: '0x' + log.topics[1].slice(26), // Extract address from indexed topic
-            blockNumber: parseInt(log.blockNumber, 16),
-            timestamp: log.timeStamp,
-            txHash: log.transactionHash,
-          }));
-          
-          setBlockchainClaims(claims);
-        }
-      } catch (error) {
-        console.error('Error fetching blockchain claims:', error);
-      }
-    }
-    
-    fetchBlockchainClaims();
-  }, []);
-
-  const executeContractCall = async (
-    functionName: any,
-    args: any[],
-    successMessage: string
-  ) => {
     setIsUpdating(true);
     try {
+      let finalAmount = newReward.amount;
+      
+      if (newReward.rewardType === 0) {
+        finalAmount = parseEther(newReward.amount).toString();
+      }
+
       await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-        functionName: functionName as any,
-        args: args as any,
+        functionName: 'addReward',
+        args: [
+          newReward.tokenAddress as `0x${string}`,
+          Number(newReward.rewardType),
+          BigInt(finalAmount),
+          BigInt(newReward.tokenId),
+          BigInt(newReward.weight),
+          newReward.name,
+          newReward.symbol,
+        ],
       });
-      alert(successMessage);
-      
-      // Give blockchain time to update, then refetch
-      setTimeout(() => {
-        refetchRewards();
-      }, 2000);
+
+      alert('✅ Reward added successfully!');
+      setNewReward({
+        tokenAddress: '',
+        rewardType: 0,
+        amount: '',
+        tokenId: '0',
+        weight: '50',
+        name: '',
+        symbol: '',
+      });
+      setShowAddForm(false);
+      refetchRewards();
     } catch (error: any) {
-      console.error(`Error calling ${functionName}:`, error);
-      alert(`Failed: ${error?.message || 'Unknown error'}`);
+      console.error(error);
+      alert(`❌ Error: ${error.message || 'Failed to add reward'}`);
     } finally {
       setIsUpdating(false);
     }
@@ -246,7 +390,7 @@ export default function AdminPage() {
 
   const handleFundContract = async () => {
     if (!fundingInput.tokenAddress || !fundingInput.amount) {
-      alert('Please fill both fields');
+      alert('Please fill all fields');
       return;
     }
 
@@ -261,1359 +405,837 @@ export default function AdminPage() {
         args: [CONTRACT_ADDRESS, amountInWei],
       });
 
-      alert(`✅ Successfully transferred ${fundingInput.amount} tokens to the contract!`);
+      alert('✅ Tokens transferred successfully!');
       setFundingInput({ tokenAddress: '', amount: '' });
-      
-      const basescanUrl = `https://basescan.org/token/${fundingInput.tokenAddress}?a=${CONTRACT_ADDRESS}`;
-      if (confirm('Tokens sent! Open BaseScan to verify balance?')) {
-        window.open(basescanUrl, '_blank');
-      }
     } catch (error: any) {
-      console.error('Error funding contract:', error);
-      
-      if (error?.message?.includes('user rejected')) {
-        alert('Transaction cancelled');
-      } else if (error?.message?.includes('insufficient funds')) {
-        alert('Insufficient token balance in your wallet');
-      } else {
-        alert(`Failed to transfer tokens: ${error?.message || 'Unknown error'}`);
-      }
+      console.error(error);
+      alert(`❌ Error: ${error.message}`);
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const handleAddReward = async () => {
-    if (!newReward.tokenAddress || !newReward.amount || !newReward.name || !newReward.symbol) {
-      alert('Please fill all required fields');
-      return;
-    }
-
-    const amountInWei = parseEther(newReward.amount);
-
-    await executeContractCall(
-      'addReward',
-      [
-        newReward.tokenAddress,
-        Number(newReward.rewardType),
-        amountInWei,
-        BigInt(newReward.tokenId),
-        BigInt(newReward.weight),
-        newReward.name,
-        newReward.symbol,
-      ],
-      'Reward added successfully!'
-    );
-
-    setNewReward({
-      tokenAddress: '',
-      rewardType: 0,
-      amount: '',
-      tokenId: '0',
-      weight: '50',
-      name: '',
-      symbol: '',
-    });
-  };
-
-  const formatTime = (seconds: bigint | undefined) => {
-    if (!seconds) return 'N/A';
-    const hours = Number(seconds) / 3600;
-    return `${hours.toFixed(1)} hours`;
-  };
-
-  const getDistributionModeLabel = (mode: number | undefined) => {
-    if (mode === undefined) return 'Unknown';
-    if (mode === 0) return 'All Rewards';
-    if (mode === 1) return 'Random Selection';
-    if (mode === 2) return 'Weighted Random';
-    return 'Unknown';
-  };
-
-  if (isLoading || isConnecting) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-        <div className="text-center">
-          <div className="animate-spin inline-block w-12 h-12 border-4 border-white/20 border-t-purple-500 rounded-full mb-4" />
-          <p className="text-gray-300">Loading admin panel...</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (!isConnected) return null;
-
   return (
-    <main className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-2">
-              Feylon Control Center
-            </h1>
-            <p className="text-gray-400">Multi-Reward Distribution System</p>
-          </div>
-          <a 
-            href="/" 
-            className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors backdrop-blur-sm border border-white/10"
-          >
-            ← Home
-          </a>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold mb-2">Reward Management</h2>
+          <p className="text-gray-400">Add and configure rewards</p>
         </div>
+        <button
+          onClick={() => setShowAddForm(!showAddForm)}
+          className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition-colors font-medium"
+        >
+          {showAddForm ? '✕ Cancel' : '+ Add Reward'}
+        </button>
+      </div>
 
-        {/* Status Bar */}
-        <div className="mb-8 p-6 rounded-2xl bg-gradient-to-r from-purple-500/20 to-pink-500/20 backdrop-blur-sm border border-white/10">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Distribution Mode Banner */}
+      {distributionMode === 0 && (
+        <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">✓</span>
             <div>
-              <div className="text-sm text-gray-400 mb-1">Contract Status</div>
-              <div className={`text-2xl font-bold ${isPaused ? 'text-red-400' : 'text-green-400'}`}>
-                {isPaused ? '⏸️ PAUSED' : '✅ ACTIVE'}
-              </div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-400 mb-1">Total Rewards</div>
-              <div className="text-2xl font-bold text-white">
-                {allRewards?.filter((r: any) => r.tokenAddress !== '0x0000000000000000000000000000000000000000').length || 0}
-              </div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-400 mb-1">Unique Users</div>
-              <div className="text-2xl font-bold text-white">{stats.uniqueUsers}</div>
-            </div>
-            <div>
-              <div className="text-sm text-gray-400 mb-1">Total Claims</div>
-              <div className="text-2xl font-bold text-white">{stats.totalClaimed}</div>
+              <div className="font-bold text-green-400">All Rewards Mode Active</div>
+              <div className="text-sm text-gray-300">Users will receive ALL active rewards when they claim</div>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Progress Dots */}
-        <div className="flex justify-center items-center mb-8 space-x-4">
-          {[1, 2, 3].map((step) => (
-            <div key={step} className="flex items-center">
-              <button
-                onClick={() => setCurrentStep(step as WizardStep)}
-                className={`w-12 h-12 rounded-full flex items-center justify-center font-bold transition-all ${
-                  currentStep === step
-                    ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white scale-110 shadow-lg'
-                    : currentStep > step
-                    ? 'bg-green-500 text-white'
-                    : 'bg-white/10 text-gray-400'
-                }`}
+      {/* Add Reward Form */}
+      {showAddForm && (
+        <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+          <h3 className="text-xl font-bold mb-4">Add New Reward</h3>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Reward Type</label>
+              <select
+                value={newReward.rewardType}
+                onChange={(e) => setNewReward({ ...newReward, rewardType: Number(e.target.value) })}
+                className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
               >
-                {currentStep > step ? '✓' : step}
-              </button>
-              {step < 3 && (
-                <div className={`w-16 md:w-32 h-1 mx-2 ${
-                  currentStep > step ? 'bg-green-500' : 'bg-white/10'
-                }`} />
-              )}
+                <option value={0}>ERC20 Token</option>
+                <option value={1}>ERC721 NFT</option>
+                <option value={2}>ERC1155</option>
+              </select>
             </div>
-          ))}
-        </div>
 
-        {/* Step Labels */}
-        <div className="flex justify-center mb-8">
-          <div className="grid grid-cols-3 gap-8 md:gap-32 text-center">
-            <div className={currentStep === 1 ? 'text-white font-bold' : 'text-gray-500'}>
-              💰 Fund Contract
+            <div>
+              <label className="block text-sm text-gray-400 mb-2">Token Contract Address</label>
+              <input
+                type="text"
+                value={newReward.tokenAddress}
+                onChange={(e) => setNewReward({ ...newReward, tokenAddress: e.target.value })}
+                placeholder="0x..."
+                className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
+              />
             </div>
-            <div className={currentStep === 2 ? 'text-white font-bold' : 'text-gray-500'}>
-              ⚙️ Configure
-            </div>
-            <div className={currentStep === 3 ? 'text-white font-bold' : 'text-gray-500'}>
-              📊 Monitor
-            </div>
-          </div>
-        </div>
 
-        {/* STEP 1: FUND CONTRACT */}
-        {currentStep === 1 && (
-          <div className="space-y-6 animate-fadeIn">
-            {/* ERC20 Funding */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-              <h2 className="text-3xl font-bold mb-2">💰 Step 1: Fund Your Contract</h2>
-              <p className="text-gray-400 mb-6">
-                Transfer tokens to the reward contract so they can be distributed to users.
-              </p>
-
-              <div className="bg-gradient-to-r from-yellow-500/20 to-orange-500/20 p-4 rounded-xl border border-yellow-500/50 mb-6">
-                <div className="flex items-start gap-3">
-                  <span className="text-2xl">⚠️</span>
-                  <div>
-                    <div className="font-bold text-yellow-300 mb-1">DO THIS AFTER STEP 2!</div>
-                    <p className="text-sm text-gray-300">
-                      Configure your rewards (Step 2) BEFORE funding to prevent accidental over-distribution.
-                    </p>
-                  </div>
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Reward Name</label>
+                <input
+                  type="text"
+                  value={newReward.name}
+                  onChange={(e) => setNewReward({ ...newReward, name: e.target.value })}
+                  placeholder="My Token"
+                  className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
+                />
               </div>
-
-              {/* ERC20 TOKEN FUNDING */}
-              <div className="mb-8">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <span>🪙</span> ERC20 Token Funding (Easy Way)
-                </h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Token Contract Address
-                    </label>
-                    <input
-                      type="text"
-                      value={fundingInput.tokenAddress}
-                      onChange={(e) => setFundingInput({...fundingInput, tokenAddress: e.target.value})}
-                      placeholder="0x... (e.g., your ERC20 token address)"
-                      className="w-full bg-black/50 border border-white/20 rounded-lg p-4 font-mono text-sm focus:border-purple-500 focus:outline-none transition-colors"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Amount to Transfer
-                    </label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      value={fundingInput.amount}
-                      onChange={(e) => setFundingInput({...fundingInput, amount: e.target.value})}
-                      placeholder="20000"
-                      className="w-full bg-black/50 border border-white/20 rounded-lg p-4 focus:border-purple-500 focus:outline-none transition-colors"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Enter in regular tokens (we'll automatically convert to wei)
-                    </p>
-                  </div>
-
-                  <button
-                    onClick={handleFundContract}
-                    disabled={isUpdating || !fundingInput.tokenAddress || !fundingInput.amount}
-                    className="w-full px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
-                  >
-                    {isUpdating ? '⏳ Transferring...' : '💸 Transfer ERC20 Tokens to Contract'}
-                  </button>
-                </div>
-              </div>
-
-              {/* NFT FUNDING */}
-              <div className="border-t border-white/10 pt-8">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <span>🖼️</span> NFT (ERC721) Funding - Unique 1/1s
-                </h3>
-                
-                <div className="bg-blue-500/20 border border-blue-500/50 rounded-lg p-4 mb-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-xl">ℹ️</span>
-                    <div className="text-sm">
-                      <div className="font-bold mb-1">For unique, one-of-a-kind NFTs</div>
-                      <p className="text-gray-300">
-                        Each NFT is distributed once. Perfect for original art, collectibles, etc.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="bg-black/50 rounded-lg p-4 border border-white/10">
-                    <div className="font-medium mb-3">Step 1: Transfer NFTs to Contract</div>
-                    <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside ml-2">
-                      <li>Go to your NFT collection on BaseScan or OpenSea</li>
-                      <li>For each NFT you want to distribute:</li>
-                      <ul className="ml-6 mt-1 space-y-1">
-                        <li>• Transfer it to: <code className="bg-white/10 px-1 rounded text-xs">{CONTRACT_ADDRESS}</code></li>
-                      </ul>
-                      <li>Note down the token IDs you transferred</li>
-                    </ol>
-                  </div>
-
-                  <div className="bg-black/50 rounded-lg p-4 border border-white/10">
-                    <div className="font-medium mb-3">Step 2: Add Token IDs to Queue</div>
-                    <p className="text-sm text-gray-400 mb-3">
-                      After transferring NFTs, go to <strong>Step 2 → Rewards Tab → NFT Queue Management</strong> to add the token IDs.
-                    </p>
-                    <button
-                      onClick={() => setCurrentStep(2)}
-                      className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm transition-colors"
-                    >
-                      Go to NFT Queue Management →
-                    </button>
-                  </div>
-
-                  <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="text-xl">⚠️</span>
-                      <div className="text-sm">
-                        <div className="font-bold mb-1">Important for ERC721:</div>
-                        <ul className="text-gray-300 space-y-1 list-disc list-inside">
-                          <li>Each NFT is distributed once (first come, first served from queue)</li>
-                          <li>Make sure to add token IDs to queue AFTER transferring</li>
-                          <li>The contract must own the NFTs before distribution</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* ERC-1155 FUNDING */}
-              <div className="border-t border-white/10 pt-8 mt-8">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <span>🎫</span> ERC-1155 Funding - Editions (Multiple Copies)
-                </h3>
-                
-                <div className="bg-green-500/20 border border-green-500/50 rounded-lg p-4 mb-4">
-                  <div className="flex items-start gap-3">
-                    <span className="text-xl">✨</span>
-                    <div className="text-sm">
-                      <div className="font-bold mb-1">For limited edition NFTs</div>
-                      <p className="text-gray-300">
-                        Everyone gets the same special edition NFT. Perfect for commemorative pieces, badges, event passes, etc.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="bg-black/50 rounded-lg p-4 border border-white/10">
-                    <div className="font-medium mb-3">Step 1: Transfer Editions to Contract</div>
-                    <ol className="text-sm text-gray-300 space-y-2 list-decimal list-inside ml-2">
-                      <li>Go to your ERC-1155 contract on BaseScan</li>
-                      <li>Click "Write Contract" → Connect wallet</li>
-                      <li>Find the <code className="bg-white/10 px-1 rounded text-xs">safeTransferFrom</code> function</li>
-                      <li>Fill in the parameters:</li>
-                      <ul className="ml-6 mt-2 space-y-1 bg-black/30 p-3 rounded">
-                        <li><code className="text-xs">from:</code> <span className="text-gray-400">Your wallet address</span></li>
-                        <li><code className="text-xs">to:</code> <code className="bg-white/10 px-1 rounded text-xs font-mono">{CONTRACT_ADDRESS}</code></li>
-                        <li><code className="text-xs">id:</code> <span className="text-gray-400">Token ID (e.g., 1 for edition #1)</span></li>
-                        <li><code className="text-xs">amount:</code> <span className="text-gray-400">How many copies (e.g., 100)</span></li>
-                        <li><code className="text-xs">data:</code> <span className="text-gray-400">0x</span></li>
-                      </ul>
-                      <li>Click "Write" and confirm transaction</li>
-                    </ol>
-                  </div>
-
-                  <div className="bg-black/50 rounded-lg p-4 border border-white/10">
-                    <div className="font-medium mb-3">Step 2: Configure Reward in Step 2</div>
-                    <p className="text-sm text-gray-400 mb-3">
-                      Go to <strong>Step 2 → Add New Reward</strong> and configure:
-                    </p>
-                    <ul className="text-sm text-gray-300 space-y-2 bg-black/30 p-3 rounded">
-                      <li>• <strong>Token Address:</strong> Your ERC-1155 contract address</li>
-                      <li>• <strong>Reward Type:</strong> Select "ERC1155"</li>
-                      <li>• <strong>Amount Per Claim:</strong> 1 (each user gets 1 copy)</li>
-                      <li>• <strong>Token ID:</strong> The edition ID you transferred (e.g., 1)</li>
-                      <li>• <strong>Name & Symbol:</strong> What to call this reward</li>
-                    </ul>
-                    <button
-                      onClick={() => setCurrentStep(2)}
-                      className="mt-3 px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm transition-colors"
-                    >
-                      Go to Configure Rewards →
-                    </button>
-                  </div>
-
-                  <div className="bg-purple-500/20 border border-purple-500/50 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="text-xl">💡</span>
-                      <div className="text-sm">
-                        <div className="font-bold mb-1">Example Use Case:</div>
-                        <p className="text-gray-300 mb-2">
-                          You have a "Feylon Early Supporter" badge (Edition #1) and want to give one to each of the first 100 claimers:
-                        </p>
-                        <ul className="text-gray-300 space-y-1 list-disc list-inside ml-2">
-                          <li>Transfer 100 copies of Edition #1 to contract</li>
-                          <li>Configure reward: Type=ERC1155, TokenID=1, Amount=1</li>
-                          <li>Result: First 100 people each get 1 badge!</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-orange-500/20 border border-orange-500/50 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <span className="text-xl">⚠️</span>
-                      <div className="text-sm">
-                        <div className="font-bold mb-1">Important for ERC-1155:</div>
-                        <ul className="text-gray-300 space-y-1 list-disc list-inside">
-                          <li>Contract balance = max claims (transfer 100 = 100 people can claim)</li>
-                          <li>Everyone gets the same edition (e.g., all get Edition #1)</li>
-                          <li>Make sure token ID in reward config matches what you transferred</li>
-                          <li>NO need to add to NFT queue (unlike ERC721)</li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 p-4 bg-blue-500/20 rounded-xl border border-blue-500/50">
-                <div className="flex items-start gap-3">
-                  <span className="text-xl">💡</span>
-                  <div className="text-sm text-gray-300">
-                    <div className="font-bold mb-1">Pro Tip:</div>
-                    After funding, click "View Balance →" on your reward in Step 3 to verify tokens/NFTs arrived!
-                  </div>
-                </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">Symbol</label>
+                <input
+                  type="text"
+                  value={newReward.symbol}
+                  onChange={(e) => setNewReward({ ...newReward, symbol: e.target.value })}
+                  placeholder="TKN"
+                  className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
+                />
               </div>
             </div>
 
-            <div className="flex justify-end">
-              <button
-                onClick={() => setCurrentStep(2)}
-                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                Next: Configure Rewards →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 2: CONFIGURE REWARDS */}
-        {currentStep === 2 && (
-          <div className="space-y-6 animate-fadeIn">
-            {/* Add New Reward */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-              <h2 className="text-3xl font-bold mb-2">⚙️ Step 2: Configure Rewards</h2>
-              <p className="text-gray-400 mb-6">
-                Set up what rewards users get when they claim. You can have multiple rewards.
-              </p>
-
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Token Address
-                    </label>
-                    <input
-                      type="text"
-                      value={newReward.tokenAddress}
-                      onChange={(e) => setNewReward({...newReward, tokenAddress: e.target.value})}
-                      placeholder="0x..."
-                      className="w-full bg-black/50 border border-white/20 rounded-lg p-3 font-mono text-sm focus:border-purple-500 focus:outline-none"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Reward Type
-                    </label>
-                    <select
-                      value={newReward.rewardType}
-                      onChange={(e) => setNewReward({...newReward, rewardType: Number(e.target.value)})}
-                      className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
-                    >
-                      <option value={0}>ERC20 Token</option>
-                      <option value={1}>NFT (ERC721)</option>
-                      <option value={2}>ERC1155</option>
-                    </select>
-                  </div>
-                </div>
-
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">
+                  {newReward.rewardType === 0 ? 'Amount (in tokens)' : 'Token ID'}
+                </label>
+                <input
+                  type="text"
+                  value={newReward.rewardType === 0 ? newReward.amount : newReward.tokenId}
+                  onChange={(e) => newReward.rewardType === 0 
+                    ? setNewReward({ ...newReward, amount: e.target.value })
+                    : setNewReward({ ...newReward, tokenId: e.target.value })
+                  }
+                  placeholder={newReward.rewardType === 0 ? "100" : "1"}
+                  className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
+                />
+              </div>
+              {newReward.rewardType === 2 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Amount Per Claim
-                    <span className="ml-2 text-xs text-gray-500">
-                      (How many tokens each user gets when they claim)
-                    </span>
-                  </label>
+                  <label className="block text-sm text-gray-400 mb-2">Amount per claim</label>
                   <input
-                    type="number"
-                    step="0.001"
+                    type="text"
                     value={newReward.amount}
-                    onChange={(e) => setNewReward({...newReward, amount: e.target.value})}
-                    placeholder="100"
-                    className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                    onChange={(e) => setNewReward({ ...newReward, amount: e.target.value })}
+                    placeholder="1"
+                    className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
                   />
                 </div>
-
-                {newReward.rewardType === 2 && (
-                  <div className="bg-purple-500/20 border border-purple-500/50 rounded-lg p-3">
-                    <div className="text-sm">
-                      <div className="font-bold text-purple-300 mb-1">🎫 ERC-1155 Token ID Required</div>
-                      <p className="text-gray-300">Enter the edition number below (e.g., 1 for Edition #1)</p>
-                    </div>
-                  </div>
-                )}
-
+              )}
+              {distributionMode !== 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Token ID
-                    <span className="ml-2 text-xs text-gray-500">
-                      (Only used for ERC-1155 editions - which edition ID to distribute)
-                    </span>
-                  </label>
-                  <input
-                    type="number"
-                    value={newReward.tokenId}
-                    onChange={(e) => setNewReward({...newReward, tokenId: e.target.value})}
-                    placeholder="0"
-                    disabled={newReward.rewardType !== 2}
-                    className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none disabled:opacity-30"
-                  />
-                  {newReward.rewardType !== 2 && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Not needed for ERC20 or ERC721 rewards
-                    </p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Weight (1-100)
-                    <span className="ml-2 text-xs text-gray-500">
-                      (Higher = more likely to be selected in weighted random mode)
-                    </span>
-                  </label>
+                  <label className="block text-sm text-gray-400 mb-2">Weight (1-100)</label>
                   <input
                     type="number"
                     value={newReward.weight}
-                    onChange={(e) => setNewReward({...newReward, weight: e.target.value})}
+                    onChange={(e) => setNewReward({ ...newReward, weight: e.target.value })}
                     min="1"
                     max="100"
-                    className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
+                    className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
                   />
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Name
-                    </label>
-                    <input
-                      type="text"
-                      value={newReward.name}
-                      onChange={(e) => setNewReward({...newReward, name: e.target.value})}
-                      placeholder="Regent Token"
-                      className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Symbol
-                    </label>
-                    <input
-                      type="text"
-                      value={newReward.symbol}
-                      onChange={(e) => setNewReward({...newReward, symbol: e.target.value})}
-                      placeholder="REGENT"
-                      className="w-full bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-              
-              <button
-                onClick={handleAddReward}
-                disabled={isUpdating}
-                className="mt-6 w-full px-8 py-4 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 shadow-lg"
-              >
-                {isUpdating ? 'Adding...' : '+ Add Reward'}
-              </button>
+              )}
             </div>
 
-            {/* Distribution Settings */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-              <h3 className="text-2xl font-bold mb-4">Distribution Settings</h3>
-              <p className="text-gray-400 mb-6">Choose how rewards are given to users:</p>
+            <button
+              onClick={handleAddReward}
+              disabled={isUpdating}
+              className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors"
+            >
+              {isUpdating ? 'Adding...' : '✓ Add Reward'}
+            </button>
+          </div>
+        </div>
+      )}
 
-              {/* TESTING MODE TOGGLE */}
-              <div className="mb-6 p-4 bg-yellow-500/20 border border-yellow-500/50 rounded-xl">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <div className="font-bold text-yellow-300">🧪 Testing Mode</div>
-                    <div className="text-sm text-gray-300">Set cooldown to 0 for unlimited testing claims</div>
-                    {cooldownPeriod !== undefined && (
-                      <div className="text-xs text-gray-400 mt-1">
-                        Current: {cooldownPeriod.toString()} seconds
+      {/* Fund Contract Section */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+        <h3 className="text-xl font-bold mb-4">💰 Fund Contract</h3>
+        <p className="text-sm text-gray-400 mb-4">Transfer ERC20 tokens to the contract for distribution</p>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Token Address</label>
+            <input
+              type="text"
+              value={fundingInput.tokenAddress}
+              onChange={(e) => setFundingInput({ ...fundingInput, tokenAddress: e.target.value })}
+              placeholder="0x..."
+              className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-2">Amount</label>
+            <input
+              type="text"
+              value={fundingInput.amount}
+              onChange={(e) => setFundingInput({ ...fundingInput, amount: e.target.value })}
+              placeholder="1000"
+              className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
+            />
+          </div>
+          <button
+            onClick={handleFundContract}
+            disabled={isUpdating}
+            className="w-full py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors"
+          >
+            {isUpdating ? 'Transferring...' : '→ Transfer Tokens'}
+          </button>
+        </div>
+      </div>
+
+      {/* Active Rewards List */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold">Active Rewards</h3>
+          <button
+            onClick={() => refetchRewards()}
+            className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
+          >
+            🔄 Refresh
+          </button>
+        </div>
+
+        {!allRewards || allRewards.length === 0 || allRewards.every((r: any) => r.tokenAddress === '0x0000000000000000000000000000000000000000') ? (
+          <div className="text-center py-12">
+            <div className="text-4xl mb-4">🎁</div>
+            <p className="text-gray-400">No rewards configured yet</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {allRewards
+              .map((reward: any, index: number) => ({ reward, index }))
+              .filter(({ reward }: any) => reward.tokenAddress !== '0x0000000000000000000000000000000000000000')
+              .map(({ reward, index }: any) => (
+                <div key={index} className="p-5 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl border border-white/10">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <div className="text-2xl font-bold">#{index}</div>
+                        <div>
+                          <div className="font-bold text-lg">{reward.name}</div>
+                          <div className="text-sm text-gray-400">{reward.symbol}</div>
+                        </div>
                       </div>
-                    )}
+                      <div className="text-sm text-gray-300 mb-1">
+                        💰 {formatEther(reward.amount)} per claim
+                      </div>
+                      <div className="text-xs text-gray-500 font-mono mb-1">
+                        {reward.tokenAddress.slice(0, 10)}...{reward.tokenAddress.slice(-8)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        ⚖️ Weight: {reward.weight.toString()}
+                      </div>
+                    </div>
+                    <div className={`px-4 py-2 rounded-lg font-bold ${
+                      reward.isActive 
+                        ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
+                        : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
+                    }`}>
+                      {reward.isActive ? '✓ Active' : '○ Inactive'}
+                    </div>
                   </div>
-                  <button
-                    onClick={async () => {
-                      try {
-                        console.log('🔍 Current cooldown:', cooldownPeriod);
-                        console.log('🔍 Owner:', owner);
-                        console.log('🔍 Your address:', address);
-                        
-                        if (!address || !owner) {
-                          alert('Wallet not connected or contract data not loaded');
-                          return;
-                        }
-                        
-                        if (address.toLowerCase() !== owner.toLowerCase()) {
-                          alert('❌ Only the contract owner can change settings!\n\nOwner: ' + owner + '\nYou: ' + address);
-                          return;
-                        }
-                        
-                        if (confirm('Enable testing mode? (Sets cooldown to 0 seconds)')) {
-                          setIsUpdating(true);
-                          
-                          const tx = await writeContractAsync({
+                  
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await writeContractAsync({
                             address: CONTRACT_ADDRESS,
                             abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-                            functionName: 'setCooldownPeriod',
-                            args: [BigInt(0)],
+                            functionName: 'toggleReward',
+                            args: [BigInt(index), !reward.isActive],
                           });
-                          
-                          console.log('✅ Transaction sent:', tx);
-                          alert('✅ Testing mode enabled! Cooldown set to 0.');
-                        }
-                      } catch (error: any) {
-                        console.error('❌ Error:', error);
-                        alert('Error: ' + (error?.shortMessage || error?.message || 'Unknown error'));
-                      } finally {
-                        setIsUpdating(false);
-                      }
-                    }}
-                    disabled={isUpdating || cooldownPeriod === BigInt(0)}
-                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-lg disabled:opacity-50 transition-colors"
-                  >
-                    {cooldownPeriod === BigInt(0) ? '✓ Testing Mode ON' : isUpdating ? 'Updating...' : 'Enable Testing Mode'}
-                  </button>
-                </div>
-                
-                {/* Debug Info */}
-                {address && owner && address.toLowerCase() !== owner.toLowerCase() && (
-                  <div className="mt-3 p-2 bg-red-500/20 border border-red-500/50 rounded text-xs">
-                    <div className="font-bold text-red-400">⚠️ Not Owner</div>
-                    <div className="text-gray-300 mt-1 font-mono text-xs">
-                      Owner: {owner.slice(0, 10)}...{owner.slice(-8)}<br/>
-                      You: {address.slice(0, 10)}...{address.slice(-8)}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-6">
-                {/* Distribution Mode */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    Distribution Mode
-                    <span className="ml-2 text-xs text-gray-500">
-                      Current: {getDistributionModeLabel(Number(distributionMode))}
-                    </span>
-                  </label>
-                  
-                  <div className="grid grid-cols-1 gap-3">
-                    <div 
-                      onClick={() => executeContractCall('setDistributionMode', [0], 'Distribution mode set to All Rewards!')}
-                      className="p-4 bg-black/50 border border-white/20 rounded-lg cursor-pointer hover:border-purple-500 transition-colors"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="text-2xl">🎁</div>
-                        <div className="flex-1">
-                          <div className="font-bold mb-1">All Rewards</div>
-                          <div className="text-sm text-gray-400">
-                            Users get ALL active rewards when they claim. Best for simple setups.
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div 
-                      onClick={() => executeContractCall('setDistributionMode', [1], 'Distribution mode set to Random Selection!')}
-                      className="p-4 bg-black/50 border border-white/20 rounded-lg cursor-pointer hover:border-purple-500 transition-colors"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="text-2xl">🎲</div>
-                        <div className="flex-1">
-                          <div className="font-bold mb-1">Random Selection</div>
-                          <div className="text-sm text-gray-400">
-                            Users get X random rewards. Set "Random Selection Count" below.
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div 
-                      onClick={() => executeContractCall('setDistributionMode', [2], 'Distribution mode set to Weighted Random!')}
-                      className="p-4 bg-black/50 border border-white/20 rounded-lg cursor-pointer hover:border-purple-500 transition-colors"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="text-2xl">⚖️</div>
-                        <div className="flex-1">
-                          <div className="font-bold mb-1">Weighted Random</div>
-                          <div className="text-sm text-gray-400">
-                            Higher weight rewards are more likely to be selected. Great for rare/common tiers.
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Random Selection Count */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Random Selection Count
-                    <span className="ml-2 text-xs text-gray-500">
-                      (Only used in Random Selection mode) Current: {randomSelectionCount?.toString()}
-                    </span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      id="randomCount"
-                      placeholder="2"
-                      defaultValue={randomSelectionCount?.toString()}
-                      className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
-                    />
-                    <button
-                      onClick={() => {
-                        const input = document.getElementById('randomCount') as HTMLInputElement;
-                        if (input.value) {
-                          executeContractCall('setRandomSelectionCount', [BigInt(input.value)], 'Random count updated!');
+                          alert('✅ Reward toggled!');
+                          refetchRewards();
+                        } catch (error: any) {
+                          alert(`❌ Error: ${error.message}`);
                         }
                       }}
-                      disabled={isUpdating}
-                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg disabled:opacity-50"
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        reward.isActive
+                          ? 'bg-yellow-600 hover:bg-yellow-700'
+                          : 'bg-green-600 hover:bg-green-700'
+                      }`}
                     >
-                      Set
+                      {reward.isActive ? 'Deactivate' : 'Activate'}
                     </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    How many rewards to give in Random Selection mode
-                  </p>
-                </div>
-
-                {/* Cooldown Period */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Cooldown Period
-                    <span className="ml-2 text-xs text-gray-500">
-                      Current: {formatTime(cooldownPeriod)}
-                    </span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      id="cooldown"
-                      placeholder="86400"
-                      defaultValue={cooldownPeriod?.toString()}
-                      className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
-                    />
                     <button
-                      onClick={() => {
-                        const input = document.getElementById('cooldown') as HTMLInputElement;
-                        if (input.value) {
-                          executeContractCall('setCooldownPeriod', [BigInt(input.value)], 'Cooldown updated!');
+                      onClick={async () => {
+                        if (!confirm('Remove this reward?')) return;
+                        try {
+                          await writeContractAsync({
+                            address: CONTRACT_ADDRESS,
+                            abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+                            functionName: 'removeReward',
+                            args: [BigInt(index)],
+                          });
+                          alert('✅ Reward removed!');
+                          refetchRewards();
+                        } catch (error: any) {
+                          alert(`❌ Error: ${error.message}`);
                         }
                       }}
-                      disabled={isUpdating}
-                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg disabled:opacity-50"
+                      className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium transition-colors"
                     >
-                      Set
+                      Remove
                     </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Time in seconds between claims. 86400 = 24 hours, 0 = instant
-                  </p>
-                </div>
-
-                {/* Max Lifetime Claims */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Max Lifetime Claims
-                    <span className="ml-2 text-xs text-gray-500">
-                      Current: {maxLifetimeClaimsPerUser?.toString()}
-                    </span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      id="maxLifetime"
-                      placeholder="1000"
-                      defaultValue={maxLifetimeClaimsPerUser?.toString()}
-                      className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
-                    />
-                    <button
-                      onClick={() => {
-                        const input = document.getElementById('maxLifetime') as HTMLInputElement;
-                        if (input.value) {
-                          executeContractCall('setMaxLifetimeClaimsPerUser', [BigInt(input.value)], 'Max lifetime claims updated!');
-                        }
-                      }}
-                      disabled={isUpdating}
-                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg disabled:opacity-50"
+                    <a
+                      href={`https://basescan.org/address/${reward.tokenAddress}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors"
                     >
-                      Set
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Maximum times a user can claim ever (lifetime limit)
-                  </p>
-                </div>
-
-                {/* Max Claims Per Hour */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Max Claims Per Hour (Rate Limit)
-                    <span className="ml-2 text-xs text-gray-500">
-                      Current: {maxClaimsPerHour?.toString()}
-                    </span>
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      id="maxHourly"
-                      placeholder="100"
-                      defaultValue={maxClaimsPerHour?.toString()}
-                      className="flex-1 bg-black/50 border border-white/20 rounded-lg p-3 focus:border-purple-500 focus:outline-none"
-                    />
-                    <button
-                      onClick={() => {
-                        const input = document.getElementById('maxHourly') as HTMLInputElement;
-                        if (input.value) {
-                          executeContractCall('setMaxClaimsPerHour', [BigInt(input.value)], 'Max hourly claims updated!');
-                        }
-                      }}
-                      disabled={isUpdating}
-                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg disabled:opacity-50"
-                    >
-                      Set
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Maximum total claims allowed per hour (prevents spam/abuse)
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-between">
-              <button
-                onClick={() => setCurrentStep(1)}
-                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                ← Back: Fund Contract
-              </button>
-              <button
-                onClick={() => setCurrentStep(3)}
-                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                Next: Monitor & Distribute →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* STEP 3: MONITOR & DISTRIBUTE */}
-        {currentStep === 3 && (
-          <div className="space-y-6 animate-fadeIn">
-            {/* Claims Analytics */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="text-3xl font-bold mb-2">📊 Claims & Activity Log</h2>
-                  <p className="text-gray-400">
-                    View all blockchain transactions and user activity
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      const csv = [
-                        ['Type', 'User', 'Message', 'Platform', 'Timestamp'],
-                        ...interactions.map(i => [
-                          i.claimed ? 'Claim' : 'Share',
-                          i.wallet_address,
-                          i.message,
-                          i.shared_platform,
-                          new Date(i.created_at).toISOString()
-                        ])
-                      ].map(row => row.join(',')).join('\n');
-                      
-                      const blob = new Blob([csv], { type: 'text/csv' });
-                      const url = window.URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `feylon-activity-${new Date().toISOString().split('T')[0]}.csv`;
-                      a.click();
-                    }}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm transition-colors"
-                  >
-                    📥 Export CSV
-                  </button>
-                  <button
-                    onClick={() => window.location.reload()}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
-                  >
-                    🔄 Refresh
-                  </button>
-                </div>
-              </div>
-
-              {/* Summary Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Total Claims</div>
-                  <div className="text-3xl font-bold text-green-400">
-                    {interactions.filter(i => i.claimed).length}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">From Supabase</div>
-                </div>
-                <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Total Shares</div>
-                  <div className="text-3xl font-bold text-blue-400">
-                    {interactions.length}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">User interactions</div>
-                </div>
-                <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Unique Users</div>
-                  <div className="text-3xl font-bold text-purple-400">
-                    {stats.uniqueUsers}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">Wallet addresses</div>
-                </div>
-                <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-lg p-4">
-                  <div className="text-sm text-gray-400 mb-1">Claim Rate</div>
-                  <div className="text-3xl font-bold text-orange-400">
-                    {interactions.length > 0 
-                      ? Math.round((interactions.filter(i => i.claimed).length / interactions.length) * 100)
-                      : 0}%
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">Share → Claim conversion</div>
-                </div>
-              </div>
-
-              {interactions.length > 0 && (
-                <div className="mb-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span>💡</span>
-                    <span className="text-gray-300">
-                      <strong>Note:</strong> This shows Supabase data. To include historical blockchain claims, see the setup guide.
-                    </span>
+                      View on BaseScan →
+                    </a>
                   </div>
                 </div>
-              )}
-
-              {/* Filter Toggles */}
-              <div className="flex gap-2 mb-6 flex-wrap">
-                <button
-                  onClick={() => setActivityFilter('all')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activityFilter === 'all'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-white/10 hover:bg-white/20 text-gray-300'
-                  }`}
-                >
-                  📊 All Activity ({interactions.length})
-                </button>
-                <button
-                  onClick={() => setActivityFilter('claims')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activityFilter === 'claims'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-white/10 hover:bg-white/20 text-gray-300'
-                  }`}
-                >
-                  🎁 Claims Only ({interactions.filter(i => i.claimed).length})
-                </button>
-                <button
-                  onClick={() => setActivityFilter('shares')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    activityFilter === 'shares'
-                      ? 'bg-purple-600 text-white'
-                      : 'bg-white/10 hover:bg-white/20 text-gray-300'
-                  }`}
-                >
-                  💬 Shares Only ({interactions.filter(i => !i.claimed).length})
-                </button>
-              </div>
-
-              {/* Activity Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-left text-gray-400 border-b border-white/10">
-                    <tr>
-                      <th className="pb-3 px-2">Type</th>
-                      <th className="pb-3 px-2">User</th>
-                      <th className="pb-3 px-2">Details</th>
-                      <th className="pb-3 px-2">Timestamp</th>
-                      <th className="pb-3 px-2">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {interactions.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="py-12">
-                          <div className="text-center space-y-4">
-                            <div className="text-6xl mb-4">🚀</div>
-                            <div className="text-xl font-bold">No Activity Yet</div>
-                            <div className="text-gray-400 max-w-md mx-auto">
-                              Shares and claims will appear here once users start interacting with Feylon.
-                            </div>
-                            
-                            {/* Supabase Setup Notice */}
-                            <div className="mt-6 p-4 bg-blue-500/20 border border-blue-500/50 rounded-lg max-w-lg mx-auto text-left">
-                              <div className="flex items-start gap-3">
-                                <span className="text-2xl">💡</span>
-                                <div className="text-sm">
-                                  <div className="font-bold mb-2">Haven't Set Up Supabase Yet?</div>
-                                  <p className="text-gray-300 mb-3">
-                                    To track user messages, platforms, and conversion rates, you'll need to set up Supabase.
-                                  </p>
-                                  <div className="space-y-2">
-                                    <div className="text-xs text-gray-400">
-                                      <strong>Without Supabase:</strong> You can still see blockchain claims (just addresses + timestamps)
-                                    </div>
-                                    <div className="text-xs text-gray-400">
-                                      <strong>With Supabase:</strong> Full context - messages, platforms, conversion tracking
-                                    </div>
-                                  </div>
-                                  <a
-                                    href="/SUPABASE-SETUP-GUIDE.md"
-                                    download
-                                    className="mt-3 inline-block px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors"
-                                  >
-                                    📥 Download Setup Guide
-                                  </a>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {/* Quick Test Button */}
-                            <div className="mt-4">
-                              <a
-                                href="/"
-                                className="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
-                              >
-                                Test a Claim →
-                              </a>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ) : (
-                      interactions
-                        .filter(i => {
-                          if (activityFilter === 'claims') return i.claimed;
-                          if (activityFilter === 'shares') return !i.claimed;
-                          return true;
-                        })
-                        .map((interaction) => (
-                        <tr key={interaction.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                          <td className="py-3 px-2">
-                            <span className={`px-2 py-1 rounded text-xs font-medium ${
-                              interaction.claimed 
-                                ? 'bg-green-500/20 text-green-400' 
-                                : 'bg-blue-500/20 text-blue-400'
-                            }`}>
-                              {interaction.claimed ? '🎁 Claimed' : '💬 Share'}
-                            </span>
-                          </td>
-                          <td className="py-3 px-2">
-                            <div className="font-mono text-xs">
-                              {interaction.wallet_address.slice(0, 6)}...{interaction.wallet_address.slice(-4)}
-                            </div>
-                            <a
-                              href={`https://basescan.org/address/${interaction.wallet_address}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-xs text-gray-500 hover:text-white transition-colors"
-                            >
-                              View on BaseScan →
-                            </a>
-                          </td>
-                          <td className="py-3 px-2">
-                            <div className="max-w-xs truncate text-gray-300">{interaction.message}</div>
-                            <div className="text-xs text-gray-500 capitalize">
-                              via {interaction.shared_platform}
-                            </div>
-                          </td>
-                          <td className="py-3 px-2 text-xs text-gray-400">
-                            {new Date(interaction.created_at).toLocaleString()}
-                          </td>
-                          <td className="py-3 px-2">
-                            <button
-                              onClick={() => {
-                                if (confirm(`Ban address ${interaction.wallet_address}?\n\nThis will prevent them from claiming future rewards.`)) {
-                                  executeContractCall(
-                                    'addToBlacklist',
-                                    [interaction.wallet_address as `0x${string}`],
-                                    'Address banned!'
-                                  );
-                                }
-                              }}
-                              disabled={isUpdating}
-                              className="px-3 py-1 bg-red-600/20 hover:bg-red-600/40 text-red-400 rounded text-xs font-medium transition-colors disabled:opacity-50"
-                            >
-                              🚫 Ban
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {interactions.length > 0 && (
-                <div className="mt-4 text-sm text-gray-500 text-center">
-                  Showing {interactions.filter(i => {
-                    if (activityFilter === 'claims') return i.claimed;
-                    if (activityFilter === 'shares') return !i.claimed;
-                    return true;
-                  }).length} of {interactions.length} total activities
-                </div>
-              )}
-            </div>
-
-            {/* Active Rewards Section */}
-            <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
-              <h2 className="text-3xl font-bold mb-2">📊 Step 3: Monitor & Distribute</h2>
-              <p className="text-gray-400 mb-6">
-                View your active rewards and monitor the system.
-              </p>
-
-              {/* Secret Transmissions Section */}
-              <div className="mb-8 p-6 bg-gradient-to-br from-purple-900/20 to-pink-900/20 border border-purple-500/30 rounded-xl">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-purple-300">👁️ Secret Transmissions</h3>
-                    <p className="text-sm text-gray-400">
-                      Whispers from the landing page ({transmissions.length})
-                    </p>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      const { data, error } = await supabase
-                        .from('transmissions')
-                        .select('*')
-                        .order('created_at', { ascending: false })
-                        .limit(50);
-                      
-                      if (!error && data) {
-                        setTransmissions(data);
-                      }
-                    }}
-                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm transition-colors"
-                  >
-                    🔄 Refresh
-                  </button>
-                </div>
-                
-                <div className="bg-black/50 rounded-lg p-4 max-h-96 overflow-y-auto">
-                  {transmissions.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <div className="text-4xl mb-2">👁️</div>
-                      <p className="text-sm">No transmissions yet. The Eye waits...</p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {transmissions.map((transmission) => (
-                        <div
-                          key={transmission.id}
-                          className="p-3 bg-white/5 rounded border border-white/10 hover:border-purple-500/50 transition-colors"
-                        >
-                          <p className="text-gray-300 text-sm mb-2">"{transmission.secret}"</p>
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>
-                              {new Date(transmission.created_at).toLocaleString()}
-                            </span>
-                            <button
-                              onClick={async () => {
-                                if (confirm('Delete this transmission?')) {
-                                  const { error } = await supabase
-                                    .from('transmissions')
-                                    .delete()
-                                    .eq('id', transmission.id);
-                                  
-                                  if (!error) {
-                                    setTransmissions(transmissions.filter(t => t.id !== transmission.id));
-                                  }
-                                }
-                              }}
-                              className="px-2 py-1 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-xs"
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Active Rewards */}
-              <div className="mb-8">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold">Active Rewards</h3>
-                  <button
-                    onClick={() => {
-                      refetchRewards();
-                      alert('Refreshed! ✅');
-                    }}
-                    className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
-                  >
-                    🔄 Refresh
-                  </button>
-                </div>
-                {!allRewards || allRewards.length === 0 || allRewards.every((r: any) => r.tokenAddress === '0x0000000000000000000000000000000000000000') ? (
-                  <div className="text-center py-12 bg-black/30 rounded-xl">
-                    <div className="text-4xl mb-4">🎁</div>
-                    <p className="text-gray-400 mb-2">No rewards configured yet.</p>
-                    <p className="text-sm text-gray-500">Go to Step 2 to add your first reward!</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {allRewards
-                      .map((reward: any, originalIndex: number) => ({ reward, originalIndex }))
-                      .filter(({ reward }: any) => reward.tokenAddress !== '0x0000000000000000000000000000000000000000')
-                      .map(({ reward, originalIndex }: any) => (
-                      <div 
-                        key={originalIndex} 
-                        className="p-5 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-xl border border-white/10 hover:border-white/20 transition-colors"
-                      >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-3 mb-2">
-                              <div className="text-2xl font-bold">#{originalIndex}</div>
-                              <div>
-                                <div className="font-bold text-lg">{reward.name}</div>
-                                <div className="text-sm text-gray-400">{reward.symbol}</div>
-                              </div>
-                            </div>
-                            <div className="text-sm text-gray-300 mb-1">
-                              💰 {formatEther(reward.amount)} tokens per claim
-                            </div>
-                            <div className="text-xs text-gray-500 font-mono mb-1">
-                              {reward.tokenAddress.slice(0, 10)}...{reward.tokenAddress.slice(-8)}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              ⚖️ Weight: {reward.weight.toString()}
-                            </div>
-                          </div>
-                          <div className={`px-4 py-2 rounded-lg font-bold ${
-                            reward.isActive 
-                              ? 'bg-green-500/20 text-green-400 border border-green-500/50' 
-                              : 'bg-gray-500/20 text-gray-400 border border-gray-500/50'
-                          }`}>
-                            {reward.isActive ? '✓ Active' : '○ Inactive'}
-                          </div>
-                        </div>
-                        
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            onClick={() => executeContractCall('toggleReward', [BigInt(originalIndex), !reward.isActive], `Reward ${!reward.isActive ? 'activated' : 'deactivated'}!`)}
-                            disabled={isUpdating}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
-                          >
-                            {reward.isActive ? 'Deactivate' : 'Activate'}
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (confirm('Remove this reward?')) {
-                                executeContractCall('removeReward', [BigInt(originalIndex)], 'Reward removed!');
-                              }
-                            }}
-                            disabled={isUpdating}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm font-medium disabled:opacity-50 transition-colors"
-                          >
-                            Remove
-                          </button>
-                          <a
-                            href={`https://basescan.org/token/${reward.tokenAddress}?a=${CONTRACT_ADDRESS}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="px-4 py-2 bg-gray-600 hover:bg-gray-700 rounded-lg text-sm font-medium transition-colors"
-                          >
-                            View Balance →
-                          </a>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Recent Activity */}
-              {interactions.length > 0 && (
-                <div>
-                  <h3 className="text-xl font-bold mb-4">Recent Activity</h3>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-gray-400 border-b border-white/10">
-                        <tr>
-                          <th className="pb-3 px-2">User</th>
-                          <th className="pb-3 px-2">Message</th>
-                          <th className="pb-3 px-2">Platform</th>
-                          <th className="pb-3 px-2">Date</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {interactions.slice(0, 10).map((interaction) => (
-                          <tr key={interaction.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                            <td className="py-3 px-2 font-mono text-xs">{interaction.wallet_address.slice(0, 6)}...{interaction.wallet_address.slice(-4)}</td>
-                            <td className="py-3 px-2 max-w-xs truncate">{interaction.message}</td>
-                            <td className="py-3 px-2 capitalize">{interaction.shared_platform}</td>
-                            <td className="py-3 px-2 text-xs text-gray-400">
-                              {new Date(interaction.created_at).toLocaleDateString()}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Emergency Controls */}
-            <div className="bg-red-500/10 backdrop-blur-sm rounded-2xl p-8 border border-red-500/30">
-              <h3 className="text-2xl font-bold mb-4 text-red-400">⚠️ Emergency Controls</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button
-                  onClick={() => executeContractCall(isPaused ? 'unpause' : 'pause', [], `Contract ${isPaused ? 'resumed' : 'paused'}!`)}
-                  disabled={isUpdating}
-                  className={`px-6 py-4 font-bold rounded-lg transition-colors ${
-                    isPaused
-                      ? 'bg-green-600 hover:bg-green-700 text-white'
-                      : 'bg-red-600 hover:bg-red-700 text-white'
-                  } disabled:opacity-50`}
-                >
-                  {isPaused ? '▶️ Resume Contract' : '⏸️ Pause Contract'}
-                </button>
-                <button
-                  onClick={() => {
-                    if (confirm('Withdraw all ETH from contract?')) {
-                      executeContractCall('withdrawETH', [], 'ETH withdrawn!');
-                    }
-                  }}
-                  disabled={isUpdating}
-                  className="px-6 py-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg disabled:opacity-50 transition-colors"
-                >
-                  💰 Withdraw ETH
-                </button>
-              </div>
-            </div>
-
-            <div className="flex justify-start">
-              <button
-                onClick={() => setCurrentStep(2)}
-                className="px-8 py-3 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                ← Back: Configure Rewards
-              </button>
-            </div>
+              ))}
           </div>
         )}
       </div>
+    </div>
+  );
+}
 
-      <style jsx>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        .animate-fadeIn {
-          animation: fadeIn 0.3s ease-out;
-        }
-      `}</style>
-    </main>
+// ==================== SETTINGS TAB ====================
+function SettingsTab({ isPaused, distributionMode, randomSelectionCount, cooldownPeriod, maxLifetimeClaimsPerUser, writeContractAsync, isUpdating, setIsUpdating }: any) {
+  const [newCooldown, setNewCooldown] = useState('');
+  const [newMaxClaims, setNewMaxClaims] = useState('');
+  const [newDistributionMode, setNewDistributionMode] = useState('0');
+  const [newRandomCount, setNewRandomCount] = useState('');
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold mb-2">Contract Settings</h2>
+        <p className="text-gray-400">Configure system parameters</p>
+      </div>
+
+      {/* Current Settings */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+        <h3 className="text-xl font-bold mb-4">Current Configuration</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="p-4 bg-black/30 rounded-lg">
+            <div className="text-sm text-gray-400 mb-1">Contract Status</div>
+            <div className={`text-2xl font-bold ${isPaused ? 'text-red-400' : 'text-green-400'}`}>
+              {isPaused ? '⏸️ Paused' : '▶️ Active'}
+            </div>
+          </div>
+          <div className="p-4 bg-black/30 rounded-lg">
+            <div className="text-sm text-gray-400 mb-1">Distribution Mode</div>
+            <div className="text-2xl font-bold">
+              {distributionMode === 0 ? '📦 All' : distributionMode === 1 ? '🎲 Random' : '⚖️ Weighted'}
+            </div>
+          </div>
+          <div className="p-4 bg-black/30 rounded-lg">
+            <div className="text-sm text-gray-400 mb-1">Cooldown Period</div>
+            <div className="text-2xl font-bold">
+              {cooldownPeriod ? `${Number(cooldownPeriod) / 3600}h` : 'Loading...'}
+            </div>
+          </div>
+          <div className="p-4 bg-black/30 rounded-lg">
+            <div className="text-sm text-gray-400 mb-1">Max Lifetime Claims</div>
+            <div className="text-2xl font-bold">
+              {maxLifetimeClaimsPerUser?.toString() || 'Loading...'}
+            </div>
+          </div>
+          {(distributionMode === 1 || distributionMode === 2) && (
+            <div className="p-4 bg-black/30 rounded-lg">
+              <div className="text-sm text-gray-400 mb-1">Random Selection Count</div>
+              <div className="text-2xl font-bold">
+                {randomSelectionCount?.toString() || 'Loading...'}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Pause/Unpause */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+        <h3 className="text-xl font-bold mb-4">Emergency Controls</h3>
+        <button
+          onClick={async () => {
+            setIsUpdating(true);
+            try {
+              await writeContractAsync({
+                address: CONTRACT_ADDRESS,
+                abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+                functionName: isPaused ? 'unpause' : 'pause',
+              });
+              alert(`✅ Contract ${isPaused ? 'unpaused' : 'paused'}!`);
+            } catch (error: any) {
+              alert(`❌ Error: ${error.message}`);
+            } finally {
+              setIsUpdating(false);
+            }
+          }}
+          disabled={isUpdating}
+          className={`px-6 py-3 rounded-lg font-medium transition-colors ${
+            isPaused
+              ? 'bg-green-600 hover:bg-green-700'
+              : 'bg-yellow-600 hover:bg-yellow-700'
+          }`}
+        >
+          {isPaused ? '▶️ Unpause Contract' : '⏸️ Pause Contract'}
+        </button>
+      </div>
+
+      {/* Distribution Mode */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+        <h3 className="text-xl font-bold mb-4">Distribution Mode</h3>
+        <div className="space-y-4">
+          <select
+            value={newDistributionMode}
+            onChange={(e) => setNewDistributionMode(e.target.value)}
+            className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
+          >
+            <option value="0">All Rewards (Users get everything)</option>
+            <option value="1">Random Selection (Pick N random rewards)</option>
+            <option value="2">Weighted Random (Based on weights)</option>
+          </select>
+          <button
+            onClick={async () => {
+              setIsUpdating(true);
+              try {
+                await writeContractAsync({
+                  address: CONTRACT_ADDRESS,
+                  abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+                  functionName: 'setDistributionMode',
+                  args: [Number(newDistributionMode)],
+                });
+                alert('✅ Distribution mode updated!');
+              } catch (error: any) {
+                alert(`❌ Error: ${error.message}`);
+              } finally {
+                setIsUpdating(false);
+              }
+            }}
+            disabled={isUpdating}
+            className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors"
+          >
+            {isUpdating ? 'Updating...' : 'Update Distribution Mode'}
+          </button>
+        </div>
+      </div>
+
+      {/* Random Selection Count */}
+      {(distributionMode === 1 || distributionMode === 2) && (
+        <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+          <h3 className="text-xl font-bold mb-4">Random Selection Count</h3>
+          <div className="space-y-4">
+            <input
+              type="number"
+              value={newRandomCount}
+              onChange={(e) => setNewRandomCount(e.target.value)}
+              placeholder="Enter number (e.g., 2)"
+              className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
+            />
+            <button
+              onClick={async () => {
+                if (!newRandomCount) return;
+                setIsUpdating(true);
+                try {
+                  await writeContractAsync({
+                    address: CONTRACT_ADDRESS,
+                    abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+                    functionName: 'setRandomSelectionCount',
+                    args: [BigInt(newRandomCount)],
+                  });
+                  alert('✅ Random count updated!');
+                  setNewRandomCount('');
+                } catch (error: any) {
+                  alert(`❌ Error: ${error.message}`);
+                } finally {
+                  setIsUpdating(false);
+                }
+              }}
+              disabled={isUpdating}
+              className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors"
+            >
+              {isUpdating ? 'Updating...' : 'Update Random Count'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Cooldown Period */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+        <h3 className="text-xl font-bold mb-4">Cooldown Period</h3>
+        <p className="text-sm text-gray-400 mb-4">Minimum time between claims (minimum 1 hour)</p>
+        <div className="space-y-4">
+          <input
+            type="number"
+            value={newCooldown}
+            onChange={(e) => setNewCooldown(e.target.value)}
+            placeholder="Enter hours (e.g., 24)"
+            className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
+          />
+          <button
+            onClick={async () => {
+              if (!newCooldown || Number(newCooldown) < 1) {
+                alert('Minimum 1 hour required');
+                return;
+              }
+              setIsUpdating(true);
+              try {
+                const seconds = Number(newCooldown) * 3600;
+                await writeContractAsync({
+                  address: CONTRACT_ADDRESS,
+                  abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+                  functionName: 'setCooldownPeriod',
+                  args: [BigInt(seconds)],
+                });
+                alert('✅ Cooldown period updated!');
+                setNewCooldown('');
+              } catch (error: any) {
+                alert(`❌ Error: ${error.message}`);
+              } finally {
+                setIsUpdating(false);
+              }
+            }}
+            disabled={isUpdating}
+            className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors"
+          >
+            {isUpdating ? 'Updating...' : 'Update Cooldown'}
+          </button>
+        </div>
+      </div>
+
+      {/* Max Lifetime Claims */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+        <h3 className="text-xl font-bold mb-4">Max Lifetime Claims Per User</h3>
+        <div className="space-y-4">
+          <input
+            type="number"
+            value={newMaxClaims}
+            onChange={(e) => setNewMaxClaims(e.target.value)}
+            placeholder="Enter max claims (e.g., 1000)"
+            className="w-full px-4 py-3 bg-black/50 border border-white/20 rounded-lg focus:outline-none focus:border-purple-500"
+          />
+          <button
+            onClick={async () => {
+              if (!newMaxClaims) return;
+              setIsUpdating(true);
+              try {
+                await writeContractAsync({
+                  address: CONTRACT_ADDRESS,
+                  abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+                  functionName: 'setMaxLifetimeClaimsPerUser',
+                  args: [BigInt(newMaxClaims)],
+                });
+                alert('✅ Max claims updated!');
+                setNewMaxClaims('');
+              } catch (error: any) {
+                alert(`❌ Error: ${error.message}`);
+              } finally {
+                setIsUpdating(false);
+              }
+            }}
+            disabled={isUpdating}
+            className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg font-medium transition-colors"
+          >
+            {isUpdating ? 'Updating...' : 'Update Max Claims'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== ACTIVITY TAB ====================
+function ActivityTab({ interactions, activityFilter, setActivityFilter, stats }: any) {
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-3xl font-bold mb-2">Activity Log</h2>
+          <p className="text-gray-400">Track all user interactions</p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              const csv = [
+                ['Type', 'User', 'Message', 'Platform', 'Timestamp'],
+                ...interactions.map((i: Interaction) => [
+                  i.claimed ? 'Claim' : 'Share',
+                  i.wallet_address,
+                  i.message,
+                  i.shared_platform,
+                  new Date(i.created_at).toISOString()
+                ])
+              ].map(row => row.join(',')).join('\n');
+              
+              const blob = new Blob([csv], { type: 'text/csv' });
+              const url = window.URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `feylon-activity-${new Date().toISOString().split('T')[0]}.csv`;
+              a.click();
+            }}
+            className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg text-sm transition-colors"
+          >
+            📥 Export CSV
+          </button>
+          <button
+            onClick={() => {
+              const uniqueAddresses = [...new Set(interactions.map((i: Interaction) => i.wallet_address))];
+              const addressList = uniqueAddresses.join('\n');
+              navigator.clipboard.writeText(addressList);
+              alert(`✅ Copied ${uniqueAddresses.length} unique wallet addresses!`);
+            }}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg text-sm transition-colors"
+          >
+            📋 Copy All Addresses
+          </button>
+        </div>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 rounded-lg p-4">
+          <div className="text-sm text-gray-400 mb-1">Total Claims</div>
+          <div className="text-3xl font-bold text-green-400">{interactions.filter((i: Interaction) => i.claimed).length}</div>
+        </div>
+        <div className="bg-gradient-to-br from-blue-500/20 to-blue-600/20 border border-blue-500/30 rounded-lg p-4">
+          <div className="text-sm text-gray-400 mb-1">Total Shares</div>
+          <div className="text-3xl font-bold text-blue-400">{interactions.length}</div>
+        </div>
+        <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 rounded-lg p-4">
+          <div className="text-sm text-gray-400 mb-1">Unique Wallets</div>
+          <div className="text-3xl font-bold text-purple-400">{stats.uniqueUsers}</div>
+        </div>
+        <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/20 border border-orange-500/30 rounded-lg p-4">
+          <div className="text-sm text-gray-400 mb-1">Claim Rate</div>
+          <div className="text-3xl font-bold text-orange-400">
+            {interactions.length > 0 
+              ? Math.round((interactions.filter((i: Interaction) => i.claimed).length / interactions.length) * 100)
+              : 0}%
+          </div>
+        </div>
+      </div>
+
+      {/* Collab Info */}
+      {interactions.length > 0 && (
+        <div className="bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/50 rounded-lg p-4">
+          <div className="flex items-start gap-3">
+            <span className="text-2xl">🤝</span>
+            <div className="flex-1">
+              <div className="font-bold mb-2 text-cyan-300">Collab Tracking Ready</div>
+              <div className="text-sm text-gray-300 mb-3">
+                All wallet addresses captured for your collab partners
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => {
+                    const uniqueAddresses = [...new Set(interactions.map((i: Interaction) => i.wallet_address))];
+                    navigator.clipboard.writeText(uniqueAddresses.join('\n'));
+                    alert(`✅ Copied ${uniqueAddresses.length} unique addresses!`);
+                  }}
+                  className="px-3 py-1.5 bg-cyan-600 hover:bg-cyan-700 rounded text-xs font-medium transition-colors"
+                >
+                  📋 Copy Unique ({[...new Set(interactions.map((i: Interaction) => i.wallet_address))].length})
+                </button>
+                <button
+                  onClick={() => {
+                    const addresses = interactions.map((i: Interaction) => i.wallet_address).join('\n');
+                    navigator.clipboard.writeText(addresses);
+                    alert(`✅ Copied all ${interactions.length} addresses!`);
+                  }}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs font-medium transition-colors"
+                >
+                  📋 Copy All ({interactions.length})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Filter Buttons */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setActivityFilter('all')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activityFilter === 'all'
+              ? 'bg-purple-600 text-white'
+              : 'bg-white/10 hover:bg-white/20 text-gray-300'
+          }`}
+        >
+          📊 All ({interactions.length})
+        </button>
+        <button
+          onClick={() => setActivityFilter('claims')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activityFilter === 'claims'
+              ? 'bg-purple-600 text-white'
+              : 'bg-white/10 hover:bg-white/20 text-gray-300'
+          }`}
+        >
+          🎁 Claims ({interactions.filter((i: Interaction) => i.claimed).length})
+        </button>
+        <button
+          onClick={() => setActivityFilter('shares')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            activityFilter === 'shares'
+              ? 'bg-purple-600 text-white'
+              : 'bg-white/10 hover:bg-white/20 text-gray-300'
+          }`}
+        >
+          💬 Shares ({interactions.filter((i: Interaction) => !i.claimed).length})
+        </button>
+      </div>
+
+      {/* Activity Table */}
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/10 overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-gray-400 bg-black/30">
+              <tr>
+                <th className="p-4">Type</th>
+                <th className="p-4">User</th>
+                <th className="p-4">Details</th>
+                <th className="p-4">Timestamp</th>
+                <th className="p-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {interactions.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12">
+                    <div className="text-center">
+                      <div className="text-6xl mb-4">🚀</div>
+                      <div className="text-xl font-bold mb-2">No Activity Yet</div>
+                      <div className="text-gray-400">Interactions will appear here</div>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                interactions
+                  .filter((i: Interaction) => {
+                    if (activityFilter === 'claims') return i.claimed;
+                    if (activityFilter === 'shares') return !i.claimed;
+                    return true;
+                  })
+                  .map((interaction: Interaction) => (
+                    <tr key={interaction.id} className="border-t border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="p-4">
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          interaction.claimed 
+                            ? 'bg-green-500/20 text-green-400' 
+                            : 'bg-blue-500/20 text-blue-400'
+                        }`}>
+                          {interaction.claimed ? '🎁' : '💬'}
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <div className="font-mono text-xs">{interaction.wallet_address}</div>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(interaction.wallet_address);
+                              alert('✅ Address copied!');
+                            }}
+                            className="px-2 py-1 bg-white/10 hover:bg-white/20 rounded text-xs transition-colors"
+                          >
+                            📋
+                          </button>
+                        </div>
+                        <a
+                          href={`https://basescan.org/address/${interaction.wallet_address}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-gray-500 hover:text-white transition-colors"
+                        >
+                          View on BaseScan →
+                        </a>
+                      </td>
+                      <td className="p-4">
+                        <div className="max-w-xs truncate text-gray-300">{interaction.message}</div>
+                        <div className="text-xs text-gray-500 capitalize">via {interaction.shared_platform}</div>
+                      </td>
+                      <td className="p-4 text-xs text-gray-400">
+                        {new Date(interaction.created_at).toLocaleString()}
+                      </td>
+                      <td className="p-4">
+                        <button
+                          onClick={async () => {
+                            if (!confirm('Delete this entry?')) return;
+                            const { error } = await supabase
+                              .from('interactions')
+                              .delete()
+                              .eq('id', interaction.id);
+                            
+                            if (!error) {
+                              window.location.reload();
+                            }
+                          }}
+                          className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-xs transition-colors"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==================== TRANSMISSIONS TAB ====================
+function TransmissionsTab({ transmissions, setTransmissions }: any) {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-bold mb-2">Secret Transmissions</h2>
+        <p className="text-gray-400">Messages sent through the portal</p>
+      </div>
+
+      <div className="bg-white/5 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+        {transmissions.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">👁️</div>
+            <p className="text-xl font-bold mb-2">No Transmissions Yet</p>
+            <p className="text-gray-400">The Eye waits for secrets...</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {transmissions.map((transmission: any) => (
+              <div
+                key={transmission.id}
+                className="p-4 bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-lg border border-white/10"
+              >
+                <p className="text-gray-300 mb-3">"{transmission.secret}"</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">
+                    {new Date(transmission.created_at).toLocaleString()}
+                  </span>
+                  <button
+                    onClick={async () => {
+                      if (!confirm('Delete this transmission?')) return;
+                      const { error } = await supabase
+                        .from('transmissions')
+                        .delete()
+                        .eq('id', transmission.id);
+                      
+                      if (!error) {
+                        setTransmissions(transmissions.filter((t: any) => t.id !== transmission.id));
+                      }
+                    }}
+                    className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded text-xs transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
