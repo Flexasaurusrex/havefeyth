@@ -16,6 +16,7 @@ export interface Interaction {
   display_name?: string;
   twitter_handle?: string;
   farcaster_handle?: string;
+  profile_image_url?: string;
   is_confession?: boolean;
 }
 
