@@ -573,6 +573,51 @@ export async function getAllInteractions(): Promise<Interaction[]> {
   }
 }
 
+// NEW: Efficient count queries for dashboard stats
+export async function getInteractionCounts(): Promise<{
+  totalInteractions: number;
+  totalClaims: number;
+  totalShares: number;
+}> {
+  if (!isConfigured()) {
+    return { totalInteractions: 0, totalClaims: 0, totalShares: 0 };
+  }
+
+  try {
+    // Count total interactions
+    const { count: totalInteractions, error: totalError } = await supabase
+      .from('interactions')
+      .select('*', { count: 'exact', head: true });
+
+    if (totalError) throw totalError;
+
+    // Count total claims (interactions where claimed = true)
+    const { count: totalClaims, error: claimsError } = await supabase
+      .from('interactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('claimed', true);
+
+    if (claimsError) throw claimsError;
+
+    // Count total shares (interactions where claimed = false)
+    const { count: totalShares, error: sharesError } = await supabase
+      .from('interactions')
+      .select('*', { count: 'exact', head: true })
+      .eq('claimed', false);
+
+    if (sharesError) throw sharesError;
+
+    return {
+      totalInteractions: totalInteractions || 0,
+      totalClaims: totalClaims || 0,
+      totalShares: totalShares || 0,
+    };
+  } catch (error) {
+    console.error('Error fetching interaction counts:', error);
+    return { totalInteractions: 0, totalClaims: 0, totalShares: 0 };
+  }
+}
+
 export async function getUserInteractionCount(walletAddress: string): Promise<number> {
   if (!isConfigured()) return 0;
 
