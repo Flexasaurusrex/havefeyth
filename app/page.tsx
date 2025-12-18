@@ -323,10 +323,19 @@ function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
   const avatars = useMemo(() => {
     if (interactions.length === 0) return [];
     
+    // Create a map of wallet -> most recent profile image
+    const walletImageMap = new Map<string, string | undefined>();
+    interactions.forEach(i => {
+      if (!walletImageMap.has(i.wallet_address) && i.profile_image_url) {
+        walletImageMap.set(i.wallet_address, i.profile_image_url);
+      }
+    });
+    
     const uniqueWallets = Array.from(new Set(interactions.map(i => i.wallet_address))).slice(0, 8);
     
     return uniqueWallets.map((wallet, i) => ({
       wallet,
+      profileImage: walletImageMap.get(wallet),
       style: {
         left: `${10 + Math.random() * 80}%`,
         top: `${15 + Math.random() * 70}%`,
@@ -353,7 +362,11 @@ function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
             animationDelay: `${avatar.delay}s`,
           }}
         >
-          <Avatar walletAddress={avatar.wallet} size={40} />
+          <Avatar 
+            walletAddress={avatar.wallet} 
+            customImageUrl={avatar.profileImage}
+            size={40} 
+          />
         </div>
       ))}
     </div>
@@ -741,7 +754,8 @@ function MiniAppExperience() {
         shareUrl,
         userProfile?.display_name,
         userProfile?.twitter_handle,
-        userProfile?.farcaster_handle
+        userProfile?.farcaster_handle,
+        userProfile?.profile_image_url || farcasterUser?.pfpUrl
       );
       
       if (!interactionResult.success) {
@@ -1194,7 +1208,7 @@ function MiniAppExperience() {
                     <div className="flex-shrink-0">
                       <Avatar
                         walletAddress={feylon.wallet_address}
-                        customImageUrl={hasFeylonProfile ? (feylon as any).profile_image_url : null}
+                        customImageUrl={feylon.profile_image_url}
                         size={40}
                       />
                     </div>
