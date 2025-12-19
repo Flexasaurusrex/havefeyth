@@ -24,6 +24,7 @@ interface Collaboration {
   end_date: string | null;
   claims_count: number;
   max_claims: number | null;
+  created_at: string;
 }
 
 export default function CollaborationsAdmin() {
