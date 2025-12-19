@@ -327,16 +327,27 @@ export async function canUserConfess(walletAddress: string): Promise<{ canConfes
       return { canConfess: true };
     }
 
+    // Check if there's an active collab that allows confession claims
+    const { data: collab } = await supabase
+      .from('collaborations')
+      .select('allow_confession_claims')
+      .eq('is_active', true)
+      .eq('is_featured', true)
+      .single();
+
+    // Use 24 hours if collab allows confessions, otherwise 72 hours (3 days)
+    const cooldownHours = (collab?.allow_confession_claims) ? 24 : 72;
+
     const lastConfession = new Date(recentConfession.created_at);
     const now = new Date();
     const hoursSinceLastConfession = (now.getTime() - lastConfession.getTime()) / (1000 * 60 * 60);
     
-    if (hoursSinceLastConfession >= 72) {
+    if (hoursSinceLastConfession >= cooldownHours) {
       return { canConfess: true };
     }
 
     const nextAvailable = new Date(lastConfession);
-    nextAvailable.setHours(nextAvailable.getHours() + 72);
+    nextAvailable.setHours(nextAvailable.getHours() + cooldownHours);
     
     return { canConfess: false, nextAvailable };
   } catch (error) {
