@@ -440,7 +440,7 @@ function MiniAppExperience() {
   const [nextShareDate, setNextShareDate] = useState<Date | null>(null);
   const [shareCooldown, setShareCooldown] = useState('');
 
-  const [openRankEligible, setOpenRankEligible] = useState(true);
+  const [openRankEligible, setOpenRankEligible] = useState(false); // Default false - must pass check
   const [openRankReason, setOpenRankReason] = useState('');
   const [openRankChecking, setOpenRankChecking] = useState(false);
   
@@ -475,7 +475,8 @@ function MiniAppExperience() {
         }
       } catch (error) {
         console.error('OpenRank check error:', error);
-        setOpenRankEligible(true);
+        setOpenRankEligible(false); // Stay false on error - safer than allowing everyone
+        setOpenRankReason('Unable to verify eligibility. Please refresh and try again.');
       } finally {
         setOpenRankChecking(false);
       }
@@ -714,11 +715,19 @@ function MiniAppExperience() {
       
       // If eligible for collab tokens, check OpenRank before allowing claim
       if (collabResult.eligible && collabResult.collaboration) {
-        // Check OpenRank eligibility for token claims
-        if (!openRankEligible) {
-          showNotification('Your account is not eligible for token rewards yet. DM @flexasaurusrex on Warpcast to appeal!', 'error');
-          setIsSharing(false);
-          return;
+        // Check OpenRank eligibility FRESH (not stale state)
+        if (farcasterUser?.fid) {
+          const openRankResult = await checkOpenRank(
+            farcasterUser.fid,
+            (farcasterUser as any).powerBadge,
+            (farcasterUser as any).followerCount
+          );
+          
+          if (!openRankResult.eligible) {
+            showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
+            setIsSharing(false);
+            return;
+          }
         }
 
         // Call the contract to claim the reward
@@ -784,11 +793,20 @@ function MiniAppExperience() {
   async function handleClaimAfterShare() {
     if (!address || !selectedPlatform) return;
     
-    if (!openRankEligible) {
-      showNotification('Your account is not eligible for token rewards yet. DM @flexasaurusrex on Warpcast to appeal!', 'error');
-      setShowShareConfirm(false);
-      setSelectedPlatform(null);
-      return;
+    // Check OpenRank eligibility FRESH (not stale state)
+    if (farcasterUser?.fid) {
+      const openRankResult = await checkOpenRank(
+        farcasterUser.fid,
+        (farcasterUser as any).powerBadge,
+        (farcasterUser as any).followerCount
+      );
+      
+      if (!openRankResult.eligible) {
+        showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
+        setShowShareConfirm(false);
+        setSelectedPlatform(null);
+        return;
+      }
     }
     
     setIsSharing(true);
