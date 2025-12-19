@@ -206,47 +206,46 @@ export default function AdminPage() {
 
         {/* Contract Address Display */}
         <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 mb-6">
-            <div className="flex items-center justify-between gap-3 flex-wrap">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">Contract:</span>
-                <a
-                  href={`https://basescan.org/address/${CONTRACT_ADDRESS}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-mono text-purple-400 hover:text-purple-300 transition-colors underline"
-                >
-                  {CONTRACT_ADDRESS}
-                </a>
-              </div>
-              <button
-                onClick={() => {
-                  navigator.clipboard.writeText(CONTRACT_ADDRESS);
-                  alert('Contract address copied!');
-                }}
-                className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-colors"
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400">Contract:</span>
+              <a
+                href={`https://basescan.org/address/${CONTRACT_ADDRESS}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-mono text-purple-400 hover:text-purple-300 transition-colors underline"
               >
-                📋 Copy
-              </button>
+                {CONTRACT_ADDRESS}
+              </a>
             </div>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(CONTRACT_ADDRESS);
+                alert('Contract address copied!');
+              }}
+              className="px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white text-xs rounded-lg transition-colors"
+            >
+              📋 Copy
+            </button>
           </div>
+        </div>
 
-          {/* Tab Navigation */}
-          <div className="flex gap-2 mt-4 overflow-x-auto">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
-                  activeTab === tab.id
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <span className="mr-2">{tab.icon}</span>
-                {tab.label}
-              </button>
-            ))}
-          </div>
+        {/* Tab Navigation */}
+        <div className="flex gap-2 overflow-x-auto">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'bg-purple-600 text-white'
+                  : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <span className="mr-2">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
         </div>
       </div>
 
