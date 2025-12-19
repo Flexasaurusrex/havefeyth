@@ -100,7 +100,6 @@ export function CollaborationModal({
           >
             {collaboration.token_amount_per_claim.toLocaleString()} {collaboration.token_symbol}
           </div>
-          <p className="text-gray-500 text-xs mt-1">+ regular Feylon rewards</p>
         </div>
 
         {/* Custom message from partner */}
