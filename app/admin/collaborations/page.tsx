@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAccount } from 'wagmi';
+import AdminNav from '@/components/AdminNav';
 
 interface Collaboration {
   id: string;
@@ -134,10 +135,12 @@ export default function CollaborationsAdmin() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-black text-white">
+      <AdminNav />
+      
+      <div className="max-w-6xl mx-auto p-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">👁️ Collaborations Admin</h1>
+          <h1 className="text-3xl font-bold mb-2">Collaborations Admin</h1>
           <p className="text-gray-400">Manage active collaborations and settings</p>
         </div>
 
