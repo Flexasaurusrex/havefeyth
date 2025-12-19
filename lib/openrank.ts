@@ -68,7 +68,7 @@ export async function checkOpenRank(
   try {
     const settings = await getSettings();
     let result: OpenRankResult;
-    let score: number | undefined;
+    let score: number = 0;
 
     // Power badge holders are always eligible (if bypass enabled)
     if (settings.power_badge_bypass && hasPowerBadge) {
