@@ -464,7 +464,11 @@ function MiniAppExperience() {
       
       setOpenRankChecking(true);
       try {
-        const result = await checkOpenRank(farcasterUser.fid, (farcasterUser as any).powerBadge);
+        const result = await checkOpenRank(
+          farcasterUser.fid, 
+          (farcasterUser as any).powerBadge,
+          (farcasterUser as any).followerCount
+        );
         setOpenRankEligible(result.eligible);
         if (!result.eligible) {
           setOpenRankReason(result.reason || 'Account not eligible for rewards');
@@ -708,8 +712,15 @@ function MiniAppExperience() {
       // Check if user can claim collab tokens for confession
       const collabResult = await checkCollabEligibility(address, true); // true = isConfession
       
-      // If eligible for collab tokens, trigger blockchain transaction
+      // If eligible for collab tokens, check OpenRank before allowing claim
       if (collabResult.eligible && collabResult.collaboration) {
+        // Check OpenRank eligibility for token claims
+        if (!openRankEligible) {
+          showNotification('Your account is not eligible for token rewards yet. DM @flexasaurusrex on Warpcast to appeal!', 'error');
+          setIsSharing(false);
+          return;
+        }
+
         // Call the contract to claim the reward
         const txResult = await sendContractTransaction({
           address: CONTRACT_ADDRESS,
@@ -1160,7 +1171,7 @@ function MiniAppExperience() {
                     )}
                     
                     <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 text-xs text-gray-400 text-center">
-                      💡 Confessions post to feed only (no social share) • 3-day cooldown between confessions
+                      💡 Confessions post to feed only (no social share) • {featuredCollab?.allow_confession_claims ? '24-hour' : '3-day'} cooldown between confessions
                     </div>
                   </div>
                 ) : (
@@ -1380,7 +1391,7 @@ function MiniAppExperience() {
                     <ul className="text-sm space-y-1 text-gray-400">
                       <li>• Post anonymously to feed only</li>
                       <li>• No social media sharing required</li>
-                      <li>• 3-day cooldown between confessions</li>
+                      <li>• {featuredCollab?.allow_confession_claims ? '24-hour' : '3-day'} cooldown between confessions</li>
                       <li>• Perfect for private thoughts</li>
                     </ul>
                   </div>
