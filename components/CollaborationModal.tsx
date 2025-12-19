@@ -17,6 +17,7 @@ export interface Collaboration {
   discord_url: string | null;
   website_url: string | null;
   require_all_socials: boolean;
+  allow_confession_claims: boolean;
   end_date: string | null;
   claims_count: number;
   max_claims: number | null;
@@ -261,7 +262,10 @@ export function useCollabIntroSeen(collabId: string | null) {
 }
 
 // Check if user can claim collab bonus (no gating, just check if already claimed)
-export async function checkCollabEligibility(walletAddress: string): Promise<{
+export async function checkCollabEligibility(
+  walletAddress: string, 
+  isConfession: boolean = false
+): Promise<{
   eligible: boolean;
   collaboration?: Collaboration;
 }> {
@@ -275,6 +279,11 @@ export async function checkCollabEligibility(walletAddress: string): Promise<{
       .single();
 
     if (!collab) return { eligible: false };
+
+    // If this is a confession, check if collab allows confession claims
+    if (isConfession && !collab.allow_confession_claims) {
+      return { eligible: false };
+    }
 
     // Check if expired
     if (collab.end_date && new Date(collab.end_date) < new Date()) {
