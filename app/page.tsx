@@ -704,11 +704,30 @@ function MiniAppExperience() {
         setIsSharing(false);
         return;
       }
+
+      // Check if user can claim collab tokens for confession
+      const collabResult = await checkCollabEligibility(address, true); // true = isConfession
+      if (collabResult.eligible && collabResult.collaboration) {
+        await markCollabClaimed(
+          collabResult.collaboration.id, 
+          address, 
+          collabResult.collaboration.token_amount_per_claim
+        );
+        setCollabBonusEarned({
+          amount: collabResult.collaboration.token_amount_per_claim,
+          symbol: collabResult.collaboration.token_symbol || 'tokens'
+        });
+        showNotification(
+          `Confession posted! +${collabResult.collaboration.token_amount_per_claim.toLocaleString()} ${collabResult.collaboration.token_symbol} 🤫`, 
+          'success'
+        );
+      } else {
+        showNotification('Confession posted! 🤫', 'success');
+      }
       
       setMessage('');
       setIsGlowing(false);
       setShowSuccess(true);
-      showNotification('Confession posted! 🤫', 'success');
       
       const [stats, newInteractions] = await Promise.all([
         getUserStats(address),
