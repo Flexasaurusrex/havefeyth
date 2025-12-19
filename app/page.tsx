@@ -707,16 +707,34 @@ function MiniAppExperience() {
 
       // Check if user can claim collab tokens for confession
       const collabResult = await checkCollabEligibility(address, true); // true = isConfession
+      
+      // If eligible for collab tokens, trigger blockchain transaction
       if (collabResult.eligible && collabResult.collaboration) {
+        // Call the contract to claim the reward
+        const txResult = await sendContractTransaction({
+          address: CONTRACT_ADDRESS,
+          abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+          functionName: 'claimReward',
+        });
+
+        // Mark interaction as claimed in database
+        if (address) {
+          await markInteractionAsClaimed(address);
+          console.log('✅ Confession marked as claimed in database');
+        }
+
+        // Mark collab as claimed
         await markCollabClaimed(
           collabResult.collaboration.id, 
           address, 
           collabResult.collaboration.token_amount_per_claim
         );
+        
         setCollabBonusEarned({
           amount: collabResult.collaboration.token_amount_per_claim,
           symbol: collabResult.collaboration.token_symbol || 'tokens'
         });
+        
         showNotification(
           `Confession posted! +${collabResult.collaboration.token_amount_per_claim.toLocaleString()} ${collabResult.collaboration.token_symbol} 🤫`, 
           'success'
