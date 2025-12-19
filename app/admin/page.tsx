@@ -7,6 +7,7 @@ import { CONTRACT_ADDRESS, HAVE_FEYTH_MULTI_REWARD_ABI, RewardType, Distribution
 import { getAllInteractions, supabase } from '@/lib/supabase';
 import type { Interaction } from '@/lib/supabase';
 import { formatEther, parseEther, getAddress } from 'viem';
+import AdminNav from '@/components/AdminNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -187,34 +188,24 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-black to-indigo-900 text-white">
-      {/* Header */}
-      <div className="border-b border-white/10 bg-black/30 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="text-3xl">👁️</div>
-              <div>
-                <h1 className="text-2xl font-bold">Feylon Admin</h1>
-                <p className="text-sm text-gray-400">Contract Management</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
-                isPaused ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
-              }`}>
-                {isPaused ? '⏸️ Paused' : '▶️ Active'}
-              </div>
-              <button
-                onClick={() => router.push('/')}
-                className="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm transition-colors"
-              >
-                ← Back to App
-              </button>
-            </div>
+      <AdminNav />
+      
+      {/* Contract Status */}
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-2xl font-bold">Contract Management</h2>
+            <p className="text-sm text-gray-400">Manage rewards and monitor activity</p>
           </div>
+          <div className={`px-3 py-1.5 rounded-lg text-sm font-medium ${
+            isPaused ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'
+          }`}>
+            {isPaused ? '⏸️ Paused' : '▶️ Active'}
+          </div>
+        </div>
 
-          {/* Contract Address Display */}
-          <div className="mt-3 bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
+        {/* Contract Address Display */}
+        <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 mb-6">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">Contract:</span>
