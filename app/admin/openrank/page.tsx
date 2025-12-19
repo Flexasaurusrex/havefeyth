@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { getCurrentSettings, updateOpenRankSettings, type OpenRankSettings } from '@/lib/openrank';
+import AdminNav from '@/components/AdminNav';
 
 export default function OpenRankAdmin() {
   const { address, isConnected } = useAccount();
@@ -90,10 +91,12 @@ export default function OpenRankAdmin() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white p-8">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-black text-white">
+      <AdminNav />
+      
+      <div className="max-w-4xl mx-auto p-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">🛡️ OpenRank Anti-Farmer Settings</h1>
+          <h1 className="text-3xl font-bold mb-2">OpenRank Anti-Farmer Settings</h1>
           <p className="text-gray-400">Adjust thresholds to block airdrop farmers while allowing legitimate users</p>
         </div>
 
