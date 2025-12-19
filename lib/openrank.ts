@@ -67,22 +67,32 @@ export async function checkOpenRank(
 ): Promise<OpenRankResult> {
   try {
     const settings = await getSettings();
+    let result: OpenRankResult;
+    let score: number | undefined;
 
     // Power badge holders are always eligible (if bypass enabled)
     if (settings.power_badge_bypass && hasPowerBadge) {
-      return {
+      result = {
         eligible: true,
         hasPowerBadge: true,
         reason: 'Power badge holder'
       };
+      
+      // Log activity
+      await logActivity(fid, null, settings.threshold, 'ALLOWED', 'Power badge bypass', hasPowerBadge, followerCount);
+      return result;
     }
 
     // High follower count bypass (established accounts)
     if (followerCount && followerCount >= settings.follower_bypass_threshold) {
-      return {
+      result = {
         eligible: true,
         reason: `${followerCount} followers (established account)`
       };
+      
+      // Log activity
+      await logActivity(fid, null, settings.threshold, 'ALLOWED', `${followerCount} followers bypass`, hasPowerBadge, followerCount);
+      return result;
     }
 
     // Fetch OpenRank score
@@ -98,37 +108,79 @@ export async function checkOpenRank(
     if (!response.ok) {
       console.error('OpenRank API error:', response.status);
       // On API failure, deny access (safer than allowing everyone)
-      return {
+      result = {
         eligible: false,
         reason: 'Unable to verify account eligibility'
       };
+      
+      // Log activity
+      await logActivity(fid, null, settings.threshold, 'BLOCKED', 'API error', hasPowerBadge, followerCount);
+      return result;
     }
 
     const data = await response.json();
-    const score = data?.result?.[0]?.score || 0;
+    score = data?.result?.[0]?.score || 0;
 
     console.log(`OpenRank check - FID: ${fid}, Score: ${score}, Threshold: ${settings.threshold}`);
 
     if (score >= settings.threshold) {
-      return {
+      result = {
         eligible: true,
         score,
         reason: `OpenRank score: ${score}`
       };
+      
+      // Log activity
+      await logActivity(fid, score, settings.threshold, 'ALLOWED', `Score ${score} >= ${settings.threshold}`, hasPowerBadge, followerCount);
+      return result;
     }
 
-    return {
+    result = {
       eligible: false,
       score,
       reason: `OpenRank score too low (${score}/${settings.threshold}). This prevents airdrop farmers. DM @flexasaurusrex to appeal.`
     };
+    
+    // Log activity
+    await logActivity(fid, score, settings.threshold, 'BLOCKED', `Score ${score} < ${settings.threshold}`, hasPowerBadge, followerCount);
+    return result;
   } catch (error) {
     console.error('OpenRank check failed:', error);
     // On error, deny access (safer default)
-    return {
+    const result = {
       eligible: false,
       reason: 'Unable to verify account. Please try again or contact support.'
     };
+    
+    // Log activity
+    await logActivity(fid, null, 0, 'BLOCKED', 'System error', hasPowerBadge, followerCount);
+    return result;
+  }
+}
+
+// Helper function to log activity
+async function logActivity(
+  fid: number,
+  score: number | null,
+  threshold: number,
+  result: 'ALLOWED' | 'BLOCKED',
+  reason: string,
+  hasPowerBadge: boolean,
+  followerCount?: number
+) {
+  try {
+    await supabase.from('openrank_activity').insert({
+      fid,
+      score,
+      threshold,
+      result,
+      reason,
+      has_power_badge: hasPowerBadge,
+      follower_count: followerCount
+    });
+  } catch (error) {
+    // Don't fail the check if logging fails
+    console.error('Failed to log OpenRank activity:', error);
   }
 }
 
