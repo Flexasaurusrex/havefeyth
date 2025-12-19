@@ -138,17 +138,43 @@ export async function updateOpenRankSettings(
   adminAddress: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { error } = await supabase
+    // Get the first settings row
+    const { data: rows } = await supabase
       .from('openrank_settings')
-      .update({
-        threshold: settings.threshold,
-        power_badge_bypass: settings.power_badge_bypass,
-        follower_bypass_threshold: settings.follower_bypass_threshold,
-        updated_by: adminAddress
-      })
-      .limit(1);
+      .select('id');
 
-    if (error) throw error;
+    if (!rows || rows.length === 0) {
+      // No row exists, insert one
+      const { error } = await supabase
+        .from('openrank_settings')
+        .insert({
+          threshold: settings.threshold,
+          power_badge_bypass: settings.power_badge_bypass,
+          follower_bypass_threshold: settings.follower_bypass_threshold,
+          updated_by: adminAddress
+        });
+
+      if (error) {
+        console.error('Insert error:', error);
+        throw error;
+      }
+    } else {
+      // Update the first row
+      const { error } = await supabase
+        .from('openrank_settings')
+        .update({
+          threshold: settings.threshold,
+          power_badge_bypass: settings.power_badge_bypass,
+          follower_bypass_threshold: settings.follower_bypass_threshold,
+          updated_by: adminAddress
+        })
+        .eq('id', rows[0].id);
+
+      if (error) {
+        console.error('Update error:', error);
+        throw error;
+      }
+    }
 
     // Clear cache so new settings take effect immediately
     cachedSettings = null;
