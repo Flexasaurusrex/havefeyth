@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAccount } from 'wagmi';
 import { getCurrentSettings, updateOpenRankSettings, type OpenRankSettings } from '@/lib/openrank';
+import { supabase } from '@/lib/supabase';
 import AdminNav from '@/components/AdminNav';
 
 export default function OpenRankAdmin() {
@@ -15,6 +16,8 @@ export default function OpenRankAdmin() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [activity, setActivity] = useState<any[]>([]);
+  const [autoRefresh, setAutoRefresh] = useState(true);
 
   useEffect(() => {
     if (address) {
@@ -26,8 +29,16 @@ export default function OpenRankAdmin() {
   useEffect(() => {
     if (isAdmin) {
       loadSettings();
+      loadActivity();
     }
   }, [isAdmin]);
+
+  useEffect(() => {
+    if (autoRefresh && isAdmin) {
+      const interval = setInterval(loadActivity, 5000); // Refresh every 5 seconds
+      return () => clearInterval(interval);
+    }
+  }, [autoRefresh, isAdmin]);
 
   async function loadSettings() {
     try {
@@ -40,6 +51,22 @@ export default function OpenRankAdmin() {
     }
   }
 
+  async function loadActivity() {
+    try {
+      const { data } = await supabase
+        .from('openrank_activity')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (data) {
+        setActivity(data);
+      }
+    } catch (error) {
+      console.error('Error loading activity:', error);
+    }
+  }
+
   async function handleSave() {
     if (!address) return;
 
@@ -49,6 +76,7 @@ export default function OpenRankAdmin() {
       
       if (result.success) {
         alert('Settings updated successfully! Changes take effect immediately.');
+        loadActivity(); // Reload activity to see impact
       } else {
         alert('Failed to update settings: ' + result.error);
       }
@@ -185,6 +213,81 @@ export default function OpenRankAdmin() {
                 <li>• <strong>Recommended for most collabs:</strong> Threshold 50-100</li>
                 <li>• <strong>Under heavy farming attack:</strong> Increase to 100-200</li>
               </ul>
+            </div>
+          </div>
+
+          {/* Live Activity Monitor */}
+          <div className="border-t border-gray-800 pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-medium text-lg">📊 Live Activity Monitor</h3>
+              <button
+                onClick={() => setAutoRefresh(!autoRefresh)}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  autoRefresh
+                    ? 'bg-green-500/20 text-green-400'
+                    : 'bg-gray-700 text-gray-400'
+                }`}
+              >
+                {autoRefresh ? '🟢 Auto-refresh ON' : '⚪ Auto-refresh OFF'}
+              </button>
+            </div>
+            
+            <div className="bg-gray-800 rounded-lg max-h-96 overflow-y-auto">
+              {activity.length === 0 ? (
+                <div className="p-8 text-center text-gray-400">
+                  <p>No activity yet. Activity will appear here when users try to claim.</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-700">
+                  {activity.map((log) => (
+                    <div key={log.id} className="p-4 hover:bg-gray-700/50 transition-colors">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                              log.result === 'ALLOWED'
+                                ? 'bg-green-500/20 text-green-400'
+                                : 'bg-red-500/20 text-red-400'
+                            }`}>
+                              {log.result === 'ALLOWED' ? '✓ ALLOWED' : '✗ BLOCKED'}
+                            </span>
+                            {log.has_power_badge && (
+                              <span className="px-2 py-0.5 rounded text-xs bg-purple-500/20 text-purple-400">
+                                ⚡ Power Badge
+                              </span>
+                            )}
+                            <span className="text-xs text-gray-500">
+                              FID: {log.fid}
+                            </span>
+                          </div>
+                          
+                          <div className="text-sm text-gray-300 mb-2">
+                            {log.reason}
+                          </div>
+                          
+                          <div className="flex items-center gap-4 text-xs text-gray-400">
+                            {log.score !== null && (
+                              <span>Score: <strong className={log.score >= log.threshold ? 'text-green-400' : 'text-red-400'}>{log.score}</strong></span>
+                            )}
+                            <span>Threshold: {log.threshold}</span>
+                            {log.follower_count && (
+                              <span>Followers: {log.follower_count}</span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="text-xs text-gray-500 whitespace-nowrap">
+                          {new Date(log.created_at).toLocaleTimeString()}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="mt-2 text-xs text-gray-500 text-center">
+              Showing last 20 checks • {autoRefresh ? 'Updates every 5 seconds' : 'Paused'}
             </div>
           </div>
 
