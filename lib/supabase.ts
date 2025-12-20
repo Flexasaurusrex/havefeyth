@@ -939,46 +939,80 @@ export async function compressAndConvertImage(file: File): Promise<string> {
 // ============================================
 
 export async function getCollabClaimersForAirdrop(collaborationId: string) {
+  console.log('🔍 Starting export for collaboration:', collaborationId);
+  
+  // First, get the token amount for this collaboration
+  const { data: collab, error: collabError } = await supabase
+    .from('collaborations')
+    .select('token_amount_per_claim')
+    .eq('id', collaborationId)
+    .single();
+
+  if (collabError || !collab) {
+    console.error('❌ Error fetching collaboration:', collabError);
+    return [];
+  }
+
+  const tokenAmountPerClaim = collab.token_amount_per_claim;
+  console.log('💰 Token amount per claim:', tokenAmountPerClaim);
+
+  // Now get all claims for this collaboration
   const { data, error } = await supabase
     .from('collaboration_claims')
     .select(`
       wallet_address,
-      claimed_at,
-      user_profiles (
-        display_name,
-        farcaster_handle
-      ),
-      collaborations!inner (
-        token_amount_per_claim
-      )
+      claimed_at
     `)
     .eq('collaboration_id', collaborationId)
     .order('claimed_at', { ascending: true });
 
   if (error) {
-    console.error('Error fetching collab claimers:', error);
+    console.error('❌ Error fetching collab claimers:', error);
     return [];
   }
+
+  if (!data || data.length === 0) {
+    console.log('⚠️ No claims found for collaboration:', collaborationId);
+    return [];
+  }
+
+  console.log(`📊 Found ${data.length} total claims`);
+
+  // Get user profiles separately
+  const walletAddresses = [...new Set(data.map(claim => claim.wallet_address))];
+  console.log(`👥 Found ${walletAddresses.length} unique wallets`);
+  
+  const { data: profiles } = await supabase
+    .from('user_profiles')
+    .select('wallet_address, display_name, farcaster_handle')
+    .in('wallet_address', walletAddresses);
+
+  const profileMap = new Map(
+    (profiles || []).map(p => [p.wallet_address, p])
+  );
 
   // Aggregate by wallet address
   const aggregated = data.reduce((acc: any, claim: any) => {
     if (!acc[claim.wallet_address]) {
+      const profile = profileMap.get(claim.wallet_address);
       acc[claim.wallet_address] = {
         wallet_address: claim.wallet_address,
         total_amount: 0,
         claim_count: 0,
-        display_name: claim.user_profiles?.display_name,
-        farcaster_handle: claim.user_profiles?.farcaster_handle,
+        display_name: profile?.display_name || '',
+        farcaster_handle: profile?.farcaster_handle || '',
         first_claim: claim.claimed_at,
         last_claim: claim.claimed_at
       };
     }
-    // Use token_amount_per_claim from the joined collaborations table
-    acc[claim.wallet_address].total_amount += claim.collaborations.token_amount_per_claim;
+    acc[claim.wallet_address].total_amount += tokenAmountPerClaim;
     acc[claim.wallet_address].claim_count += 1;
     acc[claim.wallet_address].last_claim = claim.claimed_at;
     return acc;
   }, {});
 
-  return Object.values(aggregated);
+  const result = Object.values(aggregated);
+  console.log(`✅ Returning ${result.length} aggregated claimers`);
+
+  return result;
 }
