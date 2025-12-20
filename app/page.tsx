@@ -284,7 +284,7 @@ function SplashExperience() {
           <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-500/30 rounded-2xl p-6 space-y-4">
             <p className="text-white font-medium">🎁 Earn rewards by sharing on Farcaster</p>
             <p className="text-gray-400 text-sm">Open Warpcast → Mini Apps → Search "Feylon" to start sharing and earning.</p>
-            <a
+            
               href="https://warpcast.com/feylon"
               target="_blank"
               rel="noopener noreferrer"
@@ -1147,7 +1147,7 @@ function MiniAppExperience() {
               </div>
             )}
 
-            {featuredCollab && hasProfile && (
+            {featuredCollab && (hasProfile || userProfile) && (
               <CollaborationBanner 
                 collaboration={featuredCollab} 
                 onClick={() => setShowCollabModal(true)} 
