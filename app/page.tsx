@@ -713,37 +713,40 @@ function MiniAppExperience() {
       // Check if user can claim collab tokens for confession
       const collabResult = await checkCollabEligibility(address, true); // true = isConfession
       
+      console.log('🔍 Collab check result:', collabResult);
+      
       // If eligible for collab tokens, check OpenRank before allowing claim
       if (collabResult.eligible && collabResult.collaboration) {
+        console.log('✅ Eligible for collab - checking OpenRank...');
+        
         // Check OpenRank eligibility FRESH (not stale state)
-        if (farcasterUser?.fid) {
-          const openRankResult = await checkOpenRank(
-            farcasterUser.fid,
-            (farcasterUser as any).powerBadge,
-            (farcasterUser as any).followerCount
-          );
-          
-          if (!openRankResult.eligible) {
-            showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
-            setIsSharing(false);
-            return;
-          }
+        if (!farcasterUser?.fid) {
+          console.log('❌ No Farcaster FID found');
+          showNotification('Unable to verify your account. Please reconnect your Farcaster account.', 'error');
+          setIsSharing(false);
+          return;
         }
-
-        // Call the contract to claim the reward
-        const txResult = await sendContractTransaction({
-          address: CONTRACT_ADDRESS,
-          abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-          functionName: 'claimReward',
-        });
-
-        // Mark interaction as claimed in database
-        if (address) {
-          await markInteractionAsClaimed(address);
-          console.log('✅ Confession marked as claimed in database');
+        
+        console.log('🔍 Checking OpenRank for FID:', farcasterUser.fid);
+        
+        const openRankResult = await checkOpenRank(
+          farcasterUser.fid,
+          (farcasterUser as any).powerBadge,
+          (farcasterUser as any).followerCount
+        );
+        
+        console.log('🔍 OpenRank result:', openRankResult);
+        
+        if (!openRankResult.eligible) {
+          console.log('❌ OpenRank check FAILED - blocking claim');
+          showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
+          setIsSharing(false);
+          return;
         }
+        
+        console.log('✅ OpenRank check PASSED - recording claim for airdrop');
 
-        // Mark collab as claimed
+        // Record claim in database for airdrop (NO CONTRACT TRANSACTION)
         await markCollabClaimed(
           collabResult.collaboration.id, 
           address, 
@@ -756,7 +759,7 @@ function MiniAppExperience() {
         });
         
         showNotification(
-          `Confession posted! +${collabResult.collaboration.token_amount_per_claim.toLocaleString()} ${collabResult.collaboration.token_symbol} 🤫`, 
+          `Confession posted! +${collabResult.collaboration.token_amount_per_claim.toLocaleString()} ${collabResult.collaboration.token_symbol} will be airdropped at end of collab! 🤫`, 
           'success'
         );
       } else {
@@ -794,19 +797,24 @@ function MiniAppExperience() {
     if (!address || !selectedPlatform) return;
     
     // Check OpenRank eligibility FRESH (not stale state)
-    if (farcasterUser?.fid) {
-      const openRankResult = await checkOpenRank(
-        farcasterUser.fid,
-        (farcasterUser as any).powerBadge,
-        (farcasterUser as any).followerCount
-      );
-      
-      if (!openRankResult.eligible) {
-        showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
-        setShowShareConfirm(false);
-        setSelectedPlatform(null);
-        return;
-      }
+    if (!farcasterUser?.fid) {
+      showNotification('Unable to verify your account. Please reconnect your Farcaster account.', 'error');
+      setShowShareConfirm(false);
+      setSelectedPlatform(null);
+      return;
+    }
+    
+    const openRankResult = await checkOpenRank(
+      farcasterUser.fid,
+      (farcasterUser as any).powerBadge,
+      (farcasterUser as any).followerCount
+    );
+    
+    if (!openRankResult.eligible) {
+      showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
+      setShowShareConfirm(false);
+      setSelectedPlatform(null);
+      return;
     }
     
     setIsSharing(true);
@@ -831,31 +839,7 @@ function MiniAppExperience() {
         return;
       }
       
-      const result = await sendContractTransaction({
-        address: CONTRACT_ADDRESS,
-        abi: HAVE_FEYTH_MULTI_REWARD_ABI,
-        functionName: 'claimReward',
-      });
-
-      // 🆕 MARK INTERACTION AS CLAIMED IN DATABASE
-      if (address) {
-        await markInteractionAsClaimed(address);
-        console.log('✅ Interaction marked as claimed in database');
-      }
-      
-      if (previewRewards && Array.isArray(previewRewards)) {
-        const formattedRewards: RewardItem[] = previewRewards.map((reward: any) => ({
-          tokenAddress: reward.tokenAddress,
-          rewardType: reward.rewardType,
-          name: reward.name,
-          symbol: reward.symbol,
-          amount: formatEther(reward.amount),
-          tokenId: reward.tokenId,
-          type: reward.rewardType === 0 ? 'ERC20' : reward.rewardType === 1 ? 'ERC721' : 'ERC1155',
-        }));
-        setClaimedRewards(formattedRewards);
-      }
-      
+      // Check for collab eligibility and record claim for airdrop
       const collabResult = await checkCollabEligibility(address);
       if (collabResult.eligible && collabResult.collaboration) {
         await markCollabClaimed(
@@ -867,12 +851,18 @@ function MiniAppExperience() {
           amount: collabResult.collaboration.token_amount_per_claim,
           symbol: collabResult.collaboration.token_symbol || 'tokens'
         });
+        
+        showNotification(
+          `Claim successful! +${collabResult.collaboration.token_amount_per_claim.toLocaleString()} ${collabResult.collaboration.token_symbol} will be airdropped at end of collab! 🎁`,
+          'success'
+        );
+      } else {
+        showNotification('Share recorded! 🎁', 'success');
       }
       
       setMessage('');
       setPendingMessage('');
       setIsGlowing(false);
-      showNotification('Rewards claimed successfully! 🎁', 'success');
       
       if (address) {
         const [stats, newInteractions, shareCheck] = await Promise.all([
