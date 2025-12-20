@@ -978,8 +978,9 @@ export async function getCollabClaimersForAirdrop(collaborationId: string) {
 
   console.log(`📊 Found ${data.length} total claims`);
 
-  // Get user profiles separately
-  const walletAddresses = [...new Set(data.map(claim => claim.wallet_address))];
+  // Get unique wallet addresses using Array.from instead of spread operator
+  const uniqueWallets = new Set(data.map(claim => claim.wallet_address));
+  const walletAddresses = Array.from(uniqueWallets);
   console.log(`👥 Found ${walletAddresses.length} unique wallets`);
   
   const { data: profiles } = await supabase
