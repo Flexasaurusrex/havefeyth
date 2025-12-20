@@ -463,11 +463,18 @@ function MiniAppExperience() {
       
       setOpenRankChecking(true);
       try {
-        const result = await checkOpenRank(
-          farcasterUser.fid, 
-          (farcasterUser as any).powerBadge,
-          (farcasterUser as any).followerCount
-        );
+        // Call backend API to check OpenRank (avoids CORS issues)
+        const response = await fetch('/api/check-openrank', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fid: farcasterUser.fid,
+            hasPowerBadge: (farcasterUser as any).powerBadge || false,
+            followerCount: (farcasterUser as any).followerCount || 0
+          })
+        });
+        
+        const result = await response.json();
         setOpenRankEligible(result.eligible);
         if (!result.eligible) {
           setOpenRankReason(result.reason || 'Account not eligible for rewards');
