@@ -14,7 +14,6 @@ import { Avatar } from '@/components/PixelGhost';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useReadContract } from 'wagmi';
-import { checkOpenRank } from '@/lib/openrank';
 import { 
   CollaborationModal, 
   CollaborationBanner, 
@@ -728,12 +727,22 @@ function MiniAppExperience() {
         }
         
         console.log('🔍 Checking OpenRank for FID:', farcasterUser.fid);
+        console.log('🔍 farcasterUser object:', JSON.stringify(farcasterUser, null, 2));
+        console.log('🔍 Power badge value:', (farcasterUser as any).powerBadge);
+        console.log('🔍 Follower count value:', (farcasterUser as any).followerCount);
         
-        const openRankResult = await checkOpenRank(
-          farcasterUser.fid,
-          (farcasterUser as any).powerBadge,
-          (farcasterUser as any).followerCount
-        );
+        // Call backend API to check OpenRank (avoids CORS issues)
+        const openRankResponse = await fetch('/api/check-openrank', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fid: farcasterUser.fid,
+            hasPowerBadge: (farcasterUser as any).powerBadge || false,
+            followerCount: (farcasterUser as any).followerCount || 0
+          })
+        });
+        
+        const openRankResult = await openRankResponse.json();
         
         console.log('🔍 OpenRank result:', openRankResult);
         
@@ -804,11 +813,18 @@ function MiniAppExperience() {
       return;
     }
     
-    const openRankResult = await checkOpenRank(
-      farcasterUser.fid,
-      (farcasterUser as any).powerBadge,
-      (farcasterUser as any).followerCount
-    );
+    // Call backend API to check OpenRank (avoids CORS issues)
+    const openRankResponse = await fetch('/api/check-openrank', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fid: farcasterUser.fid,
+        hasPowerBadge: (farcasterUser as any).powerBadge || false,
+        followerCount: (farcasterUser as any).followerCount || 0
+      })
+    });
+    
+    const openRankResult = await openRankResponse.json();
     
     if (!openRankResult.eligible) {
       showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
