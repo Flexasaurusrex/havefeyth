@@ -25,6 +25,10 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+// ============================================
+// NOTIFICATION TOAST COMPONENT
+// ============================================
+
 function NotificationToast({ message, type, onClose }: { message: string; type: 'success' | 'error' | 'info'; onClose: () => void }) {
   const bgColor = type === 'success' ? 'bg-green-500/90' : type === 'error' ? 'bg-red-500/90' : 'bg-purple-500/90';
   const icon = type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ';
@@ -37,6 +41,10 @@ function NotificationToast({ message, type, onClose }: { message: string; type: 
     </div>
   );
 }
+
+// ============================================
+// SPLASH PAGE COMPONENTS (for web visitors)
+// ============================================
 
 interface Transmission {
   id: string;
@@ -276,7 +284,7 @@ function SplashExperience() {
           <div className="bg-gradient-to-r from-purple-900/30 to-pink-900/30 border border-purple-500/30 rounded-2xl p-6 space-y-4">
             <p className="text-white font-medium">🎁 Earn rewards by sharing on Farcaster</p>
             <p className="text-gray-400 text-sm">Open Warpcast → Mini Apps → Search "Feylon" to start sharing and earning.</p>
-            
+            <a
               href="https://warpcast.com/feylon"
               target="_blank"
               rel="noopener noreferrer"
@@ -305,6 +313,10 @@ function SplashExperience() {
     </div>
   );
 }
+
+// ============================================
+// MINI APP COMPONENTS (for Farcaster users)
+// ============================================
 
 function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
   const avatars = useMemo(() => {
@@ -1111,7 +1123,6 @@ function MiniAppExperience() {
             )}
 
             {featuredCollab && (hasProfile || userProfile) && (
-
               <CollaborationBanner 
                 collaboration={featuredCollab} 
                 onClick={() => setShowCollabModal(true)} 
