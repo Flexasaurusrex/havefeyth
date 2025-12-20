@@ -300,20 +300,34 @@ export async function checkCollabEligibility(
       return { eligible: false };
     }
 
-    // Check if user already claimed this collab
-    const { data: claim } = await supabase
+    // Check if user already claimed this collab TODAY
+    // Users can claim once per day (24 hour cooldown)
+    const { data: existingClaims, error: claimError } = await supabase
       .from('collaboration_claims')
-      .select('claimed_reward')
+      .select('claimed_at')
       .eq('collaboration_id', collab.id)
       .eq('wallet_address', walletAddress.toLowerCase())
-      .single();
+      .order('claimed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    // If already claimed, not eligible
-    if (claim?.claimed_reward) {
-      return { eligible: false };
+    if (claimError && claimError.code !== 'PGRST116') {
+      console.error('Error checking existing claims:', claimError);
     }
 
-    // Everyone with an active collab gets the bonus (no social gate)
+    // If they have a claim, check if it's within 24 hours
+    if (existingClaims) {
+      const lastClaim = new Date(existingClaims.claimed_at);
+      const now = new Date();
+      const hoursSinceLastClaim = (now.getTime() - lastClaim.getTime()) / (1000 * 60 * 60);
+      
+      // If less than 24 hours since last claim, not eligible
+      if (hoursSinceLastClaim < 24) {
+        return { eligible: false };
+      }
+    }
+
+    // Eligible to claim!
     return { eligible: true, collaboration: collab };
   } catch (error) {
     console.error('Error checking collab eligibility:', error);
@@ -328,16 +342,13 @@ export async function markCollabClaimed(
   tokenAmount: number
 ): Promise<boolean> {
   try {
-    // Upsert the claim record (handles users who never clicked banner)
+    // Insert a new claim record (no upsert - users can claim multiple times with cooldown)
     await supabase
       .from('collaboration_claims')
-      .upsert({
+      .insert({
         collaboration_id: collaborationId,
         wallet_address: walletAddress.toLowerCase(),
-        claimed_reward: true,
         claimed_at: new Date().toISOString(),
-      }, {
-        onConflict: 'collaboration_id,wallet_address'
       });
 
     // Update collaboration stats
