@@ -934,3 +934,49 @@ export async function compressAndConvertImage(file: File): Promise<string> {
     reader.readAsDataURL(file);
   });
 }
+
+// ============================================
+// AIRDROP EXPORT FUNCTIONS
+// ============================================
+
+export async function getCollabClaimersForAirdrop(collaborationId: string) {
+  const { data, error } = await supabase
+    .from('collaboration_claims')
+    .select(`
+      wallet_address,
+      token_amount,
+      claimed_at,
+      user_profiles (
+        display_name,
+        farcaster_handle
+      )
+    `)
+    .eq('collaboration_id', collaborationId)
+    .order('claimed_at', { ascending: true });
+
+  if (error) {
+    console.error('Error fetching collab claimers:', error);
+    return [];
+  }
+
+  // Aggregate by wallet address
+  const aggregated = data.reduce((acc: any, claim: any) => {
+    if (!acc[claim.wallet_address]) {
+      acc[claim.wallet_address] = {
+        wallet_address: claim.wallet_address,
+        total_amount: 0,
+        claim_count: 0,
+        display_name: claim.user_profiles?.display_name,
+        farcaster_handle: claim.user_profiles?.farcaster_handle,
+        first_claim: claim.claimed_at,
+        last_claim: claim.claimed_at
+      };
+    }
+    acc[claim.wallet_address].total_amount += claim.token_amount;
+    acc[claim.wallet_address].claim_count += 1;
+    acc[claim.wallet_address].last_claim = claim.claimed_at;
+    return acc;
+  }, {});
+
+  return Object.values(aggregated);
+}
