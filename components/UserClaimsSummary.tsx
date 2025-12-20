@@ -28,10 +28,12 @@ export default function UserClaimsSummary() {
     const { data } = await supabase
       .from('collaboration_claims')
       .select(`
-        token_amount,
-        collaborations (
+        wallet_address,
+        claimed_at,
+        collaborations!inner (
           partner_name,
           token_symbol,
+          token_amount_per_claim,
           end_date
         )
       `)
@@ -49,12 +51,14 @@ export default function UserClaimsSummary() {
             endDate: claim.collaborations.end_date
           };
         }
-        acc[key].total += claim.token_amount;
+        // Use token_amount_per_claim from the joined collaborations table
+        acc[key].total += claim.collaborations.token_amount_per_claim;
         return acc;
       }, {});
 
       setPendingClaims(Object.values(aggregated));
     }
+
     setLoading(false);
   }
 
@@ -66,6 +70,7 @@ export default function UserClaimsSummary() {
         <span>💰</span>
         <span>Pending Airdrops</span>
       </h3>
+      
       <div className="space-y-2">
         {pendingClaims.map((claim) => (
           <div 
@@ -86,6 +91,7 @@ export default function UserClaimsSummary() {
           </div>
         ))}
       </div>
+      
       <p className="text-xs text-gray-400 mt-3 text-center border-t border-gray-700 pt-2">
         ✨ Tokens will be airdropped when collaboration ends
       </p>
