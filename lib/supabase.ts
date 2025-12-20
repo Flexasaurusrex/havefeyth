@@ -238,7 +238,7 @@ export async function recordInteraction(
           message,
           shared_platform: platform,
           share_url: shareUrl,
-          claimed: false, // ← FIXED: Start as false, update to true after blockchain claim
+          claimed: false,
           display_name: displayName,
           twitter_handle: twitterHandle,
           farcaster_handle: farcasterHandle,
@@ -422,7 +422,7 @@ export async function recordConfession(
           message,
           shared_platform: 'twitter',
           share_url: '',
-          claimed: false, // ← FIXED: Confessions also start as unclaimed
+          claimed: false,
           is_confession: true,
         },
       ]);
@@ -570,12 +570,11 @@ export async function getAllInteractions(): Promise<Interaction[]> {
   if (!isConfigured()) return [];
 
   try {
-    // FIXED: Get ALL interactions, not just claimed ones
     const { data, error } = await supabase
       .from('interactions')
       .select('*')
       .order('created_at', { ascending: false })
-      .limit(100); // Increased limit
+      .limit(100);
 
     if (error) throw error;
     return data || [];
@@ -944,11 +943,13 @@ export async function getCollabClaimersForAirdrop(collaborationId: string) {
     .from('collaboration_claims')
     .select(`
       wallet_address,
-      token_amount,
       claimed_at,
       user_profiles (
         display_name,
         farcaster_handle
+      ),
+      collaborations!inner (
+        token_amount_per_claim
       )
     `)
     .eq('collaboration_id', collaborationId)
@@ -972,7 +973,8 @@ export async function getCollabClaimersForAirdrop(collaborationId: string) {
         last_claim: claim.claimed_at
       };
     }
-    acc[claim.wallet_address].total_amount += claim.token_amount;
+    // Use token_amount_per_claim from the joined collaborations table
+    acc[claim.wallet_address].total_amount += claim.collaborations.token_amount_per_claim;
     acc[claim.wallet_address].claim_count += 1;
     acc[claim.wallet_address].last_claim = claim.claimed_at;
     return acc;
