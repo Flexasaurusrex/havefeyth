@@ -1111,6 +1111,7 @@ function MiniAppExperience() {
             )}
 
             {featuredCollab && (hasProfile || userProfile) && (
+
               <CollaborationBanner 
                 collaboration={featuredCollab} 
                 onClick={() => setShowCollabModal(true)} 
