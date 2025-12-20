@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, getCollabClaimersForAirdrop } from '@/lib/supabase';
 import { useAccount } from 'wagmi';
 import AdminNav from '@/components/AdminNav';
 
@@ -33,6 +33,7 @@ export default function CollaborationsAdmin() {
   const [collaborations, setCollaborations] = useState<Collaboration[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -101,6 +102,42 @@ export default function CollaborationsAdmin() {
       alert('Failed to update collaboration');
     } finally {
       setUpdating(null);
+    }
+  }
+
+  async function handleExportClaimers(collabId: string, partnerName: string) {
+    setExporting(collabId);
+    try {
+      const claimers = await getCollabClaimersForAirdrop(collabId);
+      
+      if (claimers.length === 0) {
+        alert('No claims to export yet!');
+        return;
+      }
+      
+      // Create CSV
+      const csv = [
+        'Wallet Address,Total Amount,Claim Count,Display Name,Farcaster Handle,First Claim,Last Claim',
+        ...claimers.map((c: any) => 
+          `${c.wallet_address},${c.total_amount},${c.claim_count},"${c.display_name || ''}","${c.farcaster_handle || ''}","${c.first_claim}","${c.last_claim}"`
+        )
+      ].join('\n');
+      
+      // Download file
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${partnerName}_airdrop_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      
+      alert(`Exported ${claimers.length} addresses for airdrop!`);
+    } catch (error) {
+      console.error('Export error:', error);
+      alert('Failed to export claimers');
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -264,6 +301,26 @@ export default function CollaborationsAdmin() {
                     >
                       {updating === collab.id ? '...' : collab.is_active ? 'ACTIVE' : 'INACTIVE'}
                     </button>
+                  </div>
+
+                  {/* Export for Airdrop */}
+                  <div className="border-t border-gray-700 pt-3">
+                    <button
+                      onClick={() => handleExportClaimers(collab.id, collab.partner_name)}
+                      disabled={exporting === collab.id || collab.claims_count === 0}
+                      className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                      {exporting === collab.id ? (
+                        '📥 Exporting...'
+                      ) : (
+                        <>
+                          📥 Export {collab.claims_count} Claims for Airdrop
+                        </>
+                      )}
+                    </button>
+                    <p className="text-xs text-gray-500 text-center mt-2">
+                      Downloads CSV with wallet addresses and amounts
+                    </p>
                   </div>
                 </div>
               </div>
