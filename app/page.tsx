@@ -14,6 +14,7 @@ import { Avatar } from '@/components/PixelGhost';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useReadContract } from 'wagmi';
+import { checkOpenRank } from '@/lib/openrank';
 import { 
   CollaborationModal, 
   CollaborationBanner, 
@@ -322,6 +323,7 @@ function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
   const avatars = useMemo(() => {
     if (interactions.length === 0) return [];
     
+    // Create a map of wallet -> most recent profile image
     const walletImageMap = new Map<string, string | undefined>();
     interactions.forEach(i => {
       if (!walletImageMap.has(i.wallet_address) && i.profile_image_url) {
@@ -438,7 +440,7 @@ function MiniAppExperience() {
   const [nextShareDate, setNextShareDate] = useState<Date | null>(null);
   const [shareCooldown, setShareCooldown] = useState('');
 
-  const [openRankEligible, setOpenRankEligible] = useState(false);
+  const [openRankEligible, setOpenRankEligible] = useState(true);
   const [openRankReason, setOpenRankReason] = useState('');
   const [openRankChecking, setOpenRankChecking] = useState(false);
   
@@ -452,7 +454,7 @@ function MiniAppExperience() {
     functionName: 'previewClaim',
     args: address ? [address as `0x${string}`] : undefined,
     query: {
-      enabled: !!address && isConnected,
+      enabled: !!address && isConnected, // Only run when wallet is connected
     },
   });
 
@@ -462,25 +464,14 @@ function MiniAppExperience() {
       
       setOpenRankChecking(true);
       try {
-        const response = await fetch('/api/check-openrank', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fid: farcasterUser.fid,
-            hasPowerBadge: (farcasterUser as any).powerBadge || false,
-            followerCount: (farcasterUser as any).followerCount || 0
-          })
-        });
-        
-        const result = await response.json();
+        const result = await checkOpenRank(farcasterUser.fid, (farcasterUser as any).powerBadge);
         setOpenRankEligible(result.eligible);
         if (!result.eligible) {
           setOpenRankReason(result.reason || 'Account not eligible for rewards');
         }
       } catch (error) {
         console.error('OpenRank check error:', error);
-        setOpenRankEligible(false);
-        setOpenRankReason('Unable to verify eligibility. Please refresh and try again.');
+        setOpenRankEligible(true);
       } finally {
         setOpenRankChecking(false);
       }
@@ -713,56 +704,11 @@ function MiniAppExperience() {
         setIsSharing(false);
         return;
       }
-
-      const collabResult = await checkCollabEligibility(address, true);
-      
-      if (collabResult.eligible && collabResult.collaboration) {
-        if (!farcasterUser?.fid) {
-          showNotification('Unable to verify your account. Please reconnect your Farcaster account.', 'error');
-          setIsSharing(false);
-          return;
-        }
-        
-        const openRankResponse = await fetch('/api/check-openrank', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fid: farcasterUser.fid,
-            hasPowerBadge: (farcasterUser as any).powerBadge || false,
-            followerCount: (farcasterUser as any).followerCount || 0
-          })
-        });
-        
-        const openRankResult = await openRankResponse.json();
-        
-        if (!openRankResult.eligible) {
-          showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
-          setIsSharing(false);
-          return;
-        }
-
-        await markCollabClaimed(
-          collabResult.collaboration.id, 
-          address, 
-          collabResult.collaboration.token_amount_per_claim
-        );
-        
-        setCollabBonusEarned({
-          amount: collabResult.collaboration.token_amount_per_claim,
-          symbol: collabResult.collaboration.token_symbol || 'tokens'
-        });
-        
-        showNotification(
-          `Confession posted! +${collabResult.collaboration.token_amount_per_claim.toLocaleString()} ${collabResult.collaboration.token_symbol} will be airdropped at end of collab! 🤫`, 
-          'success'
-        );
-      } else {
-        showNotification('Confession posted! 🤫', 'success');
-      }
       
       setMessage('');
       setIsGlowing(false);
       setShowSuccess(true);
+      showNotification('Confession posted! 🤫', 'success');
       
       const [stats, newInteractions] = await Promise.all([
         getUserStats(address),
@@ -790,27 +736,8 @@ function MiniAppExperience() {
   async function handleClaimAfterShare() {
     if (!address || !selectedPlatform) return;
     
-    if (!farcasterUser?.fid) {
-      showNotification('Unable to verify your account. Please reconnect your Farcaster account.', 'error');
-      setShowShareConfirm(false);
-      setSelectedPlatform(null);
-      return;
-    }
-    
-    const openRankResponse = await fetch('/api/check-openrank', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fid: farcasterUser.fid,
-        hasPowerBadge: (farcasterUser as any).powerBadge || false,
-        followerCount: (farcasterUser as any).followerCount || 0
-      })
-    });
-    
-    const openRankResult = await openRankResponse.json();
-    
-    if (!openRankResult.eligible) {
-      showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
+    if (!openRankEligible) {
+      showNotification('Your account is not eligible for token rewards yet. DM @flexasaurusrex on Warpcast to appeal!', 'error');
       setShowShareConfirm(false);
       setSelectedPlatform(null);
       return;
@@ -838,6 +765,31 @@ function MiniAppExperience() {
         return;
       }
       
+      const result = await sendContractTransaction({
+        address: CONTRACT_ADDRESS,
+        abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+        functionName: 'claimReward',
+      });
+
+      // 🆕 MARK INTERACTION AS CLAIMED IN DATABASE
+      if (address) {
+        await markInteractionAsClaimed(address);
+        console.log('✅ Interaction marked as claimed in database');
+      }
+      
+      if (previewRewards && Array.isArray(previewRewards)) {
+        const formattedRewards: RewardItem[] = previewRewards.map((reward: any) => ({
+          tokenAddress: reward.tokenAddress,
+          rewardType: reward.rewardType,
+          name: reward.name,
+          symbol: reward.symbol,
+          amount: formatEther(reward.amount),
+          tokenId: reward.tokenId,
+          type: reward.rewardType === 0 ? 'ERC20' : reward.rewardType === 1 ? 'ERC721' : 'ERC1155',
+        }));
+        setClaimedRewards(formattedRewards);
+      }
+      
       const collabResult = await checkCollabEligibility(address);
       if (collabResult.eligible && collabResult.collaboration) {
         await markCollabClaimed(
@@ -849,18 +801,12 @@ function MiniAppExperience() {
           amount: collabResult.collaboration.token_amount_per_claim,
           symbol: collabResult.collaboration.token_symbol || 'tokens'
         });
-        
-        showNotification(
-          `Claim successful! +${collabResult.collaboration.token_amount_per_claim.toLocaleString()} ${collabResult.collaboration.token_symbol} will be airdropped at end of collab! 🎁`,
-          'success'
-        );
-      } else {
-        showNotification('Share recorded! 🎁', 'success');
       }
       
       setMessage('');
       setPendingMessage('');
       setIsGlowing(false);
+      showNotification('Rewards claimed successfully! 🎁', 'success');
       
       if (address) {
         const [stats, newInteractions, shareCheck] = await Promise.all([
@@ -1122,7 +1068,7 @@ function MiniAppExperience() {
               </div>
             )}
 
-            {featuredCollab && (hasProfile || userProfile) && (
+            {featuredCollab && hasProfile && (
               <CollaborationBanner 
                 collaboration={featuredCollab} 
                 onClick={() => setShowCollabModal(true)} 
@@ -1177,7 +1123,7 @@ function MiniAppExperience() {
                     )}
                     
                     <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 text-xs text-gray-400 text-center">
-                      💡 Confessions post to feed only (no social share) • {featuredCollab?.allow_confession_claims ? '24-hour' : '3-day'} cooldown between confessions
+                      💡 Confessions post to feed only (no social share) • 3-day cooldown between confessions
                     </div>
                   </div>
                 ) : (
@@ -1397,7 +1343,7 @@ function MiniAppExperience() {
                     <ul className="text-sm space-y-1 text-gray-400">
                       <li>• Post anonymously to feed only</li>
                       <li>• No social media sharing required</li>
-                      <li>• {featuredCollab?.allow_confession_claims ? '24-hour' : '3-day'} cooldown between confessions</li>
+                      <li>• 3-day cooldown between confessions</li>
                       <li>• Perfect for private thoughts</li>
                     </ul>
                   </div>
