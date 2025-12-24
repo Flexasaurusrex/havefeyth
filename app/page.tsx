@@ -14,6 +14,7 @@ import { Avatar } from '@/components/PixelGhost';
 import Link from 'next/link';
 import { useWallet } from '@/contexts/WalletContext';
 import { useReadContract } from 'wagmi';
+import { checkOpenRank } from '@/lib/openrank';
 import { 
   CollaborationModal, 
   CollaborationBanner, 
@@ -322,6 +323,7 @@ function FloatingAvatars({ interactions }: { interactions: Interaction[] }) {
   const avatars = useMemo(() => {
     if (interactions.length === 0) return [];
     
+    // Create a map of wallet -> most recent profile image
     const walletImageMap = new Map<string, string | undefined>();
     interactions.forEach(i => {
       if (!walletImageMap.has(i.wallet_address) && i.profile_image_url) {
@@ -438,7 +440,7 @@ function MiniAppExperience() {
   const [nextShareDate, setNextShareDate] = useState<Date | null>(null);
   const [shareCooldown, setShareCooldown] = useState('');
 
-  const [openRankEligible, setOpenRankEligible] = useState(false);
+  const [openRankEligible, setOpenRankEligible] = useState(true);
   const [openRankReason, setOpenRankReason] = useState('');
   const [openRankChecking, setOpenRankChecking] = useState(false);
   
@@ -452,7 +454,7 @@ function MiniAppExperience() {
     functionName: 'previewClaim',
     args: address ? [address as `0x${string}`] : undefined,
     query: {
-      enabled: !!address && isConnected,
+      enabled: !!address && isConnected, // Only run when wallet is connected
     },
   });
 
@@ -462,25 +464,14 @@ function MiniAppExperience() {
       
       setOpenRankChecking(true);
       try {
-        const response = await fetch('/api/check-openrank', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fid: farcasterUser.fid,
-            hasPowerBadge: (farcasterUser as any).powerBadge || false,
-            followerCount: (farcasterUser as any).followerCount || 0
-          })
-        });
-        
-        const result = await response.json();
+        const result = await checkOpenRank(farcasterUser.fid, (farcasterUser as any).powerBadge);
         setOpenRankEligible(result.eligible);
         if (!result.eligible) {
           setOpenRankReason(result.reason || 'Account not eligible for rewards');
         }
       } catch (error) {
         console.error('OpenRank check error:', error);
-        setOpenRankEligible(false);
-        setOpenRankReason('Unable to verify eligibility. Please refresh and try again.');
+        setOpenRankEligible(true);
       } finally {
         setOpenRankChecking(false);
       }
@@ -713,56 +704,11 @@ function MiniAppExperience() {
         setIsSharing(false);
         return;
       }
-
-      const collabResult = await checkCollabEligibility(address, true);
-      
-      if (collabResult.eligible && collabResult.collaboration) {
-        if (!farcasterUser?.fid) {
-          showNotification('Unable to verify your account. Please reconnect your Farcaster account.', 'error');
-          setIsSharing(false);
-          return;
-        }
-        
-        const openRankResponse = await fetch('/api/check-openrank', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fid: farcasterUser.fid,
-            hasPowerBadge: (farcasterUser as any).powerBadge || false,
-            followerCount: (farcasterUser as any).followerCount || 0
-          })
-        });
-        
-        const openRankResult = await openRankResponse.json();
-        
-        if (!openRankResult.eligible) {
-          showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
-          setIsSharing(false);
-          return;
-        }
-
-        await markCollabClaimed(
-          collabResult.collaboration.id, 
-          address, 
-          collabResult.collaboration.token_amount_per_claim
-        );
-        
-        setCollabBonusEarned({
-          amount: collabResult.collaboration.token_amount_per_claim,
-          symbol: collabResult.collaboration.token_symbol || 'tokens'
-        });
-        
-        showNotification(
-          `Confession posted! +${collabResult.collaboration.token_amount_per_claim.toLocaleString()} ${collabResult.collaboration.token_symbol} will be airdropped at end of collab! 🤫`, 
-          'success'
-        );
-      } else {
-        showNotification('Confession posted! 🤫', 'success');
-      }
       
       setMessage('');
       setIsGlowing(false);
       setShowSuccess(true);
+      showNotification('Confession posted! 🤫', 'success');
       
       const [stats, newInteractions] = await Promise.all([
         getUserStats(address),
@@ -790,27 +736,8 @@ function MiniAppExperience() {
   async function handleClaimAfterShare() {
     if (!address || !selectedPlatform) return;
     
-    if (!farcasterUser?.fid) {
-      showNotification('Unable to verify your account. Please reconnect your Farcaster account.', 'error');
-      setShowShareConfirm(false);
-      setSelectedPlatform(null);
-      return;
-    }
-    
-    const openRankResponse = await fetch('/api/check-openrank', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fid: farcasterUser.fid,
-        hasPowerBadge: (farcasterUser as any).powerBadge || false,
-        followerCount: (farcasterUser as any).followerCount || 0
-      })
-    });
-    
-    const openRankResult = await openRankResponse.json();
-    
-    if (!openRankResult.eligible) {
-      showNotification(openRankResult.reason || 'Your account is not eligible for token rewards yet. DM @flexasaurusrex to appeal!', 'error');
+    if (!openRankEligible) {
+      showNotification('Your account is not eligible for token rewards yet. DM @flexasaurusrex on Warpcast to appeal!', 'error');
       setShowShareConfirm(false);
       setSelectedPlatform(null);
       return;
@@ -838,6 +765,31 @@ function MiniAppExperience() {
         return;
       }
       
+      const result = await sendContractTransaction({
+        address: CONTRACT_ADDRESS,
+        abi: HAVE_FEYTH_MULTI_REWARD_ABI,
+        functionName: 'claimReward',
+      });
+
+      // 🆕 MARK INTERACTION AS CLAIMED IN DATABASE
+      if (address) {
+        await markInteractionAsClaimed(address);
+        console.log('✅ Interaction marked as claimed in database');
+      }
+      
+      if (previewRewards && Array.isArray(previewRewards)) {
+        const formattedRewards: RewardItem[] = previewRewards.map((reward: any) => ({
+          tokenAddress: reward.tokenAddress,
+          rewardType: reward.rewardType,
+          name: reward.name,
+          symbol: reward.symbol,
+          amount: formatEther(reward.amount),
+          tokenId: reward.tokenId,
+          type: reward.rewardType === 0 ? 'ERC20' : reward.rewardType === 1 ? 'ERC721' : 'ERC1155',
+        }));
+        setClaimedRewards(formattedRewards);
+      }
+      
       const collabResult = await checkCollabEligibility(address);
       if (collabResult.eligible && collabResult.collaboration) {
         await markCollabClaimed(
@@ -849,18 +801,12 @@ function MiniAppExperience() {
           amount: collabResult.collaboration.token_amount_per_claim,
           symbol: collabResult.collaboration.token_symbol || 'tokens'
         });
-        
-        showNotification(
-          `Claim successful! +${collabResult.collaboration.token_amount_per_claim.toLocaleString()} ${collabResult.collaboration.token_symbol} will be airdropped at end of collab! 🎁`,
-          'success'
-        );
-      } else {
-        showNotification('Share recorded! 🎁', 'success');
       }
       
       setMessage('');
       setPendingMessage('');
       setIsGlowing(false);
+      showNotification('Rewards claimed successfully! 🎁', 'success');
       
       if (address) {
         const [stats, newInteractions, shareCheck] = await Promise.all([
@@ -1122,7 +1068,7 @@ function MiniAppExperience() {
               </div>
             )}
 
-            {featuredCollab && (hasProfile || userProfile) && (
+            {featuredCollab && hasProfile && (
               <CollaborationBanner 
                 collaboration={featuredCollab} 
                 onClick={() => setShowCollabModal(true)} 
@@ -1177,7 +1123,7 @@ function MiniAppExperience() {
                     )}
                     
                     <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3 text-xs text-gray-400 text-center">
-                      💡 Confessions post to feed only (no social share) • {featuredCollab?.allow_confession_claims ? '24-hour' : '3-day'} cooldown between confessions
+                      💡 Confessions post to feed only (no social share) • 3-day cooldown between confessions
                     </div>
                   </div>
                 ) : (
@@ -1222,6 +1168,206 @@ function MiniAppExperience() {
           <div className="text-center"><a href="/admin" className="text-gray-500 hover:text-white transition-colors text-sm">Admin Panel →</a></div>
         )}
       </div>
+
+      <div className="w-full max-w-3xl mx-auto mt-12 md:mt-16 px-4 animate-fade-in relative z-10">
+        <div className="text-center mb-6 md:mb-8">
+          <h2 className="text-3xl md:text-4xl font-light mb-2 text-glow">Recent Feylons</h2>
+          <p className="text-gray-500 text-sm md:text-base">See what others are sharing 👁️</p>
+        </div>
+
+        {interactions.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4">👁️</div>
+            <p className="text-gray-500">No Feylons yet. Be the first to share!</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {interactions.slice(0, 20).map((feylon, index) => {
+              const displayName = feylon.display_name || 'Anon';
+              const hasFeylonProfile = feylon.display_name || feylon.twitter_handle || feylon.farcaster_handle;
+              const isConfessionPost = feylon.is_confession;
+              
+              return (
+                <div key={feylon.id} className="group bg-gradient-to-r from-purple-900/10 to-pink-900/10 backdrop-blur-sm border border-white/10 rounded-xl p-3 md:p-4 hover:border-purple-500/30 transition-all duration-200 animate-fade-in relative" style={{ animationDelay: `${index * 0.05}s` }}>
+                  {isAdmin && (
+                    <button
+                      onClick={() => handleDeleteInteraction(feylon.id)}
+                      disabled={deletingId === feylon.id}
+                      className="absolute top-2 right-2 p-2 bg-red-500/20 hover:bg-red-500/40 text-red-400 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Delete this Feylon"
+                    >
+                      {deletingId === feylon.id ? (
+                        <div className="w-4 h-4 border-2 border-red-400/30 border-t-red-400 rounded-full animate-spin" />
+                      ) : (
+                        <span className="text-sm">🗑️</span>
+                      )}
+                    </button>
+                  )}
+
+                  <div className="flex gap-3 md:gap-4">
+                    <div className="flex-shrink-0">
+                      <Avatar
+                        walletAddress={feylon.wallet_address}
+                        customImageUrl={feylon.profile_image_url}
+                        size={40}
+                      />
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2 flex-wrap text-xs md:text-sm">
+                        <span className="font-semibold text-white truncate">{displayName}</span>
+                        
+                        {isConfessionPost && (
+                          <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded">
+                            🤫 Confession
+                          </span>
+                        )}
+                        
+                        {hasFeylonProfile && !isConfessionPost && (
+                          <>
+                            {feylon.farcaster_handle && <a href={`https://warpcast.com/${feylon.farcaster_handle}`} target="_blank" rel="noopener noreferrer" className="text-xs text-purple-400 hover:text-purple-300 transition-colors truncate">@{feylon.farcaster_handle}</a>}
+                          </>
+                        )}
+                        
+                        <span className="text-xs text-gray-500 font-mono hidden sm:inline">{feylon.wallet_address.slice(0, 6)}...{feylon.wallet_address.slice(-4)}</span>
+                        <span className="text-xs text-gray-600 hidden sm:inline">•</span>
+                        <span className="text-xs text-gray-500">{new Date(feylon.created_at).toLocaleDateString()}</span>
+                      </div>
+
+                      <p className="text-gray-300 text-sm md:text-base leading-relaxed mb-3 break-words">"{feylon.message}"</p>
+
+                      <div className="flex items-center gap-2 md:gap-3 text-xs flex-wrap">
+                        {!isConfessionPost && (
+                          <span className="px-2 py-1 rounded text-xs bg-purple-500/20 text-purple-400">
+                            🟪
+                          </span>
+                        )}
+                        
+                        {feylon.claimed && !isConfessionPost && (
+                          <span className="px-2 py-1 bg-green-500/20 text-green-400 rounded text-xs">
+                            ✓ Claimed
+                          </span>
+                        )}
+                        
+                        {!isConfessionPost && (
+                          <button onClick={() => {
+                            const authorCredit = hasFeylonProfile ? `by ${displayName}${feylon.farcaster_handle ? ` (@${feylon.farcaster_handle})` : ''}` : `by Anon (${feylon.wallet_address.slice(0, 6)}...${feylon.wallet_address.slice(-4)})`;
+                            const shareText = `Check out this Feylon ${authorCredit}:\n\n"${feylon.message}"\n\nShared via FEYLON 👁️\n${window.location.origin}`;
+                            const encodedText = encodeURIComponent(shareText);
+                            const shareUrlLink = `https://warpcast.com/~/compose?text=${encodedText}`;
+                            openUrl(shareUrlLink);
+                          }} className="ml-auto px-2 md:px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white rounded transition-colors text-xs whitespace-nowrap">🔄 Share</button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showShareConfirm && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+          <div className="bg-gradient-to-br from-purple-900 to-black border border-purple-500/50 rounded-2xl p-8 max-w-md mx-4 space-y-6 animate-scale-in">
+            <div className="text-center">
+              <div className="text-6xl mb-4">👁️</div>
+              <h2 className="text-3xl font-bold mb-2">Did you share?</h2>
+              <p className="text-gray-400">Click "Yes, I Shared!" to claim your rewards</p>
+            </div>
+
+            {!openRankEligible && (
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-3 text-sm text-orange-400 text-center">
+                ⚠️ Token rewards are restricted for your account. You'll still earn points!
+              </div>
+            )}
+
+            {previewRewards && previewRewards.length > 0 && openRankEligible && (
+              <div className="bg-black/50 rounded-lg p-4 border border-white/10">
+                <div className="text-sm text-gray-400 mb-2">You'll receive:</div>
+                {previewRewards.map((reward: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between py-2">
+                    <span className="font-medium">{reward.name}</span>
+                    <span className="text-green-400">{formatEther(reward.amount)} {reward.symbol}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <button onClick={handleCancelShare} className="flex-1 px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-medium rounded-lg transition-colors">Cancel</button>
+              <button onClick={handleClaimAfterShare} disabled={isSharing || isConfirming || isPending} className="flex-1 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">{isSharing || isConfirming || isPending ? 'Claiming...' : 'Yes, I Shared! 🎁'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showWhatIsModal && (
+        <div className="fixed inset-0 bg-black/90 backdrop-blur-md flex items-center justify-center z-50 animate-fade-in p-4">
+          <div className="bg-gradient-to-br from-purple-900/90 via-black to-pink-900/90 border-2 border-purple-500/50 rounded-2xl max-w-2xl w-full p-8 md:p-12 space-y-6 animate-scale-in relative overflow-y-auto max-h-[90vh]">
+            <button onClick={() => setShowWhatIsModal(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white transition-colors text-2xl">✕</button>
+
+            <div className="text-center space-y-4">
+              <div className="text-7xl">👁️</div>
+              <h2 className="text-4xl md:text-5xl font-light tracking-wider text-glow">What is a Feylon?</h2>
+            </div>
+
+            <div className="space-y-6 text-gray-300">
+              <div className="bg-black/30 border border-purple-500/30 rounded-lg p-6">
+                <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                  <span className="text-2xl">💭</span> Share Your Truth
+                </h3>
+                <p className="leading-relaxed">
+                  A Feylon is a message of goodwill or confession shared on social media. It could be something uplifting, a deep thought, or something you need to get off your chest.
+                </p>
+              </div>
+
+              <div className="bg-black/30 border border-pink-500/30 rounded-lg p-6">
+                <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                  <span className="text-2xl">🎯</span> Two Ways to Share
+                </h3>
+                <div className="space-y-4">
+                  <div className="bg-black/20 border border-purple-500/20 rounded-lg p-4">
+                    <div className="font-bold text-purple-400 mb-2">🌐 Social Share Mode (10 points)</div>
+                    <ul className="text-sm space-y-1 text-gray-400">
+                      <li>• Share on Farcaster</li>
+                      <li>• Build daily streaks for bonus points</li>
+                      <li>• Claim contract rewards instantly</li>
+                      <li>• Appears in feed with your profile</li>
+                    </ul>
+                  </div>
+                  
+                  <div className="bg-black/20 border border-purple-500/20 rounded-lg p-4">
+                    <div className="font-bold text-purple-400 mb-2">🤫 Confession Mode (5 points)</div>
+                    <ul className="text-sm space-y-1 text-gray-400">
+                      <li>• Post anonymously to feed only</li>
+                      <li>• No social media sharing required</li>
+                      <li>• 3-day cooldown between confessions</li>
+                      <li>• Perfect for private thoughts</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-black/30 border border-purple-500/30 rounded-lg p-6">
+                <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                  <span className="text-2xl">🏆</span> Compete & Climb
+                </h3>
+                <p className="leading-relaxed">
+                  Build streaks by sharing daily. Earn bonus points and climb the leaderboard. Show the world your dedication.
+                </p>
+              </div>
+            </div>
+
+            <div className="text-center pt-4 border-t border-white/10">
+              <button onClick={() => setShowWhatIsModal(false)} className="px-8 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold rounded-lg transition-all transform hover:scale-105">
+                Got it! Let's Share 🔥
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showCollabModal && featuredCollab && (
         <CollaborationModal
